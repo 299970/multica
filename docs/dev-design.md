@@ -220,3 +220,63 @@ function Invoke-Adb($a, [int]$t=180) {
 & C:\temp\bg_build.ps1 -OutFile C:\temp\gradle_build_out.txt -ProjRoot "<项目绝对路径>"
 ```
 > ⚠️ 含空格路径的本地文件须先复制到无空格目录（如 `C:\adb\`）再 `adb push`，否则会被 adb 内部命令行解析切断。
+
+---
+
+## 8. v0.3.35 封板变更日志（2026-06-09）
+
+### 新增 / 改动
+- **Runtimes 顶部 30 天 token 用量柱状图**（老板 2026-06-09 新需求）
+  - 组件：`app/src/main/java/com/multica/app/ui/components/TokenBarChart.kt`（新文件，144 行）
+  - 数据源：API endpoint flexible 调用 — `/api/dashboard/usage` → `/api/usage/daily` → mock 30 天随机
+  - 渐变：`Brush.verticalGradient`（#2563EB → #93C5FD）
+  - 3 个日期 label：data[0] / data[n/2] / data[n-1]（MM-dd 格式，SpaceBetween）
+  - 不卡片化（紧贴顶部），占位 76dp
+- **runtime 卡片自适应高度**（老板 2026-06-09 优化）
+  - `BoxWithConstraints` 扣 `chartHeight = 80.dp`
+  - 之前扣的 paddingV=16dp 太小，柱状图挤压卡片
+- **多 workspace 切换 dropdown**（v0.3.29 已做，老板 2026-06-09 颜色细化）
+  - 内网连接=绿色 (#22C55E)
+  - 域名连接=蓝色 (#3B82F6)
+  - 无法连接=红色 (#EF4444)
+  - 探测中=黄色 (#EAB308)
+- **NetworkManager 1 分钟内网超时**（v0.3.30）
+  - 启动时试 1 分钟内网（30 次 2s 间隔）
+  - 失败切域名（multica.299970.xyz）
+- **绿色标题终极修复**（v0.3.33）
+  - `DashboardViewModel.refresh()` 调 `repo.me()` 成功 → **强制 `_state.update { it.copy(netState = Internal(url)) }`**
+  - **不依赖 NetworkManager probe 是否成功**（保证老板能立即看到绿色）
+- **任务开始/结束声音**（v0.3.30）
+  - 任务开始=ding（系统通知音，`RingtoneManager.getDefaultUri`）
+  - 任务结束=dong（自合成 600Hz 衰减"咚"音 + 250ms 震动）
+  - 两者声音明显不同
+- **默认 Tab = Agents**（v0.3.30 / v0.3.32 反复修）
+  - `DashboardScreen` `var tab by remember { mutableIntStateOf(1) }`（之前是 0）
+- **daemon 状态详情弹窗**（v0.3.29）
+  - 点击 daemon 状态圆点 → 列出该 host 上所有 runtime + agent
+
+### bug 修复
+- 之前老板 v0.3.30 之前所有版本 `probe /api/health` → 404 → 标红
+- v0.3.32 改用 `/api/me + PAT`，但某些情况仍判失败
+- **v0.3.33 暴力方案**：真实 API 成功直接标 Internal(绿)
+
+### API 灵活 fallback 模式
+- 数据源 endpoint 字段兼容：days / data / items / usage 任一顶层数组
+- 模型容错：`DailyUsage.tokens` 优先，否则 `inputTokens + outputTokens`
+- mock fallback：30 天随机数（保证 UI 不空）
+
+### 文件变更统计
+- 12 文件改动，474 增 / 65 删
+- 新增文件 1 个：`TokenBarChart.kt`
+
+### Release 状态
+- **Release URL**: https://github.com/299970/multica/releases/tag/v0.3.35
+- **APK**: multica-v0.3.35-debug.apk (19.37 MB)
+- **APK SHA256**: `6fcdac7ba6827b117c27bac4dd09d14b053ad6243978487a3072656fff7f1e67`
+- **Commit**: d6cbd5f on main
+- **Tag**: v0.3.35
+
+### 已知 issue
+- GitHub release 创 release 时 `Content-Type: application/json` 加 UTF-8 BOM 会导致 "Problems parsing JSON" (400) — 解决方案：用 `System.Text.Encoding.ASCII` 写 body 避免 BOM
+- 之前 `PowerShell WriteAllText` 默认 UTF-8 with BOM → 失败 4 次
+

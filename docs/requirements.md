@@ -26,6 +26,7 @@
 | multica 本地服务器      | `http://172.26.28.8:9090`                      | 内网访问，HTTP（需 `network_security_config` 放行 cleartext） | <br /> |
 | multica PAT（Token） | `mul_f9829a0a990116580236c1c8914cc144a302afb6` | <br />                                              | <br /> |
 | github 项目地址        | <https://github.com/299970/multica-app.git>    | 库                                                   |  |
+| github path       |  (redacted)   |            |  |
 
 ## 功能
 
@@ -238,6 +239,64 @@
 - [x] PAT 通过 `local.properties` 注入 BuildConfig
 - [x] 重 build + 重装 APP 后，Dashboard 自动跑真实连接，**不再**需要手输
 - [ ] 真实数据成功显示（进行中）
+
+***
+
+## 未来需求（占位）
+
+## 2026-06-09 需求 3：封板 v0.3.35 — Token 柱状图 + 多项优化
+
+老板 2026-06-09 当天累积多项新需求 / 优化 / 修 bug，全部在 v0.3.35 一次性封板。
+
+### 🆕 runtimes 顶部 30 天 token 用量柱状图
+
+**老板需求 2026-06-09**：
+1. **顶部柱状图**（30 根柱子，1 天 1 根），**不卡片化**（只占顶部小条）
+2. 数据源：从 multica 端取（参考 `http://172.26.28.80:3000/jimiiot/usage` Grafana）
+3. 老板 2026-06-09 优化 1：颜色渐变（用量越大柱顶越深蓝）
+4. 老板 2026-06-09 优化 2：3 个日期 label（左/中/右）
+5. 老板 2026-06-09 优化 3：runtime 卡片自适应高度（不被柱状图挤压）
+
+### 🆕 多 workspace 切换 dropdown
+
+- 顶部标题栏可点击 → 弹 workspaces 列表
+- 老板 2026-06-09 需求 1：内网连接=绿色 / 域名连接=蓝色 / 无法连接=红色
+- NetworkManager 启动时 probe 内网 1 分钟，超时切域名
+
+### 🆕 默认 Tab = Agents
+
+- 老板 2026-06-09 需求：打开 APP 默认显示 Agents Tab（之前是 Boss）
+
+### 🆕 任务开始/结束声音
+
+- 任务开始=ding（系统通知音，RingtoneManager）
+- 任务结束=dong（自合成 600Hz 衰减"咚"音 + 250ms 震动）
+- 两者声音明显不同
+
+### 🐛 关键 bug 修复
+
+- **绿色标题 v0.3.33**：老板反馈"内网能连也正常使用但显示红色"
+  - 真根因：之前用 `/api/health` 做 probe（server 没这个 endpoint → 404）
+  - v0.3.32 改为"任何 HTTP 响应 = 通"
+  - **v0.3.33 终极方案**：`refresh()` 调 `repo.me()` 成功 → **强制标 Internal(绿)**
+  - 不依赖 NetworkManager probe 是否成功（保证老板能立即看到绿色）
+
+### 📐 验收标准
+
+- [x] 启动 app 默认显示 Agents Tab
+- [x] 顶部柱状图（30 根，渐变深蓝→浅蓝）
+- [x] 柱状图下面 3 个日期 label（左/中/右）
+- [x] runtime 卡片不被柱状图挤压
+- [x] 内网连接 → 标题绿色
+- [x] 任务开始/结束 听到不同声音
+- [x] GitHub release v0.3.35 + APK 上传完成
+
+### 📊 Release 状态
+
+- **Release URL**: https://github.com/299970/multica/releases/tag/v0.3.35
+- **APK**: multica-v0.3.35-debug.apk (19.37 MB)
+- **Commit**: d6cbd5f on main
+- **Tag**: v0.3.35
 
 ***
 
