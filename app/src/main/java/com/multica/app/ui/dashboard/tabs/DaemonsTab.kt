@@ -1,7 +1,9 @@
 package com.multica.app.ui.dashboard.tabs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -15,14 +17,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -133,6 +140,7 @@ private fun HostCard(
     agents: List<Agent>,
     minHeight: androidx.compose.ui.unit.Dp = 0.dp,
     onClick: () -> Unit,
+    onStatusClick: () -> Unit = {},  // v0.3.29: 点状态圆点显示详情
 ) {
     val state = group.aggregateState
     // 该 host 上所有 AI agent（任意 runtime 上的）
@@ -149,13 +157,21 @@ private fun HostCard(
         Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // 第 1 行：host 名称 + 状态圆点 + 状态文字
+        // 第 1 行：host 名称 + 状态圆点（可点击）+ 状态文字
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            StatusDot(state = state, modifier = Modifier.padding(2.dp))
+            // v0.3.29: 状态圆点可点击 → 弹详情
+            Box(
+                modifier = Modifier
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(onClick = onStatusClick)
+                    .padding(2.dp),
+            ) {
+                StatusDot(state = state, modifier = Modifier.padding(2.dp))
+            }
             Text(
                 text = "🖥  ${group.hostName}",
                 style = MaterialTheme.typography.titleMedium,
@@ -249,4 +265,70 @@ fun EmptyTab(text: String) {
     ) {
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/**
+ * v0.3.29 老板 2026-06-08 需求：runtimes 卡片中"点击状态图标可以查看该 daemon 的详细状态"
+ *  - AlertDialog 形式
+ *  - 列出该 host 上所有 runtime + 该 host 上所有 agent
+ *  - 显示汇总状态 + 详细状态文字
+ */
+@Composable
+private fun DaemonDetailDialog(
+    group: HostGroup,
+    agents: List<Agent>,
+    onDismiss: () -> Unit,
+) {
+    val hostAgentIds = group.runtimes.map { it.id }.toSet()
+    val hostAgents = agents.filter { it.runtimeId in hostAgentIds }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusDot(state = group.aggregateState)
+                Text("🖥 ${group.hostName}", style = MaterialTheme.typography.titleMedium)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 汇总状态
+                Text(
+                    text = "汇总状态：${statusLabel(group.aggregateState)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                HorizontalDivider()
+                // runtimes 列表
+                Text("Runtimes (${group.runtimes.size})", style = MaterialTheme.typography.titleSmall)
+                group.runtimes.forEach { rt ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        StatusDot(state = rt.state)
+                        Text("• ${rt.profile ?: "?"}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        Text("(${rt.state})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    rt.deviceName?.takeIf { it.isNotBlank() }?.let {
+                        Text("  $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
+                    }
+                }
+                // agents 列表
+                if (hostAgents.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text("Agents (${hostAgents.size})", style = MaterialTheme.typography.titleSmall)
+                    hostAgents.forEach { a ->
+                        Text(
+                            text = "• ${a.name} (${a.state})",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        },
+    )
 }

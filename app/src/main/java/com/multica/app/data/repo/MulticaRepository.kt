@@ -70,6 +70,14 @@ class MulticaRepository(
         w.start()
     }
 
+    // === v0.3.29 兼容 NetworkManager 切换 endpoint ===
+    /** v0.3.29: NetworkManager 探测到 endpoint 切换时调用，rebuild api + 重启 WS */
+    fun onEndpointChanged(newServerUrl: String) {
+        if (newServerUrl == serverUrl) return
+        android.util.Log.d("MulticaNet", "endpoint changed: $serverUrl -> $newServerUrl, rebuild")
+        rebuild(newServerUrl, pat)
+    }
+
     /** 当前激活 workspace 的 slug（给 WS query param 用），由 ViewModel 切 workspace 时更新。 */
     @Volatile private var _currentSlug: String? = null
     fun setActiveWorkspaceSlug(slug: String?) {

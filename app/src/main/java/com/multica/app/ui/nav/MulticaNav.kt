@@ -25,7 +25,7 @@ fun MulticaNav() {
             val ctx = androidx.compose.ui.platform.LocalContext.current
             val vm: DashboardViewModel = viewModel {
                 // v0.3.20: 传 Application 用于播放状态变化音
-                DashboardViewModel(ctx.applicationContext as android.app.Application, ServiceLocator.repo, ServiceLocator.settings)
+                DashboardViewModel(ctx.applicationContext as android.app.Application, ServiceLocator.repo, ServiceLocator.settings, ServiceLocator.net)
             }
             // 首次进入触发一次 refresh
             androidx.compose.runtime.LaunchedEffect(Unit) { vm.refresh() }

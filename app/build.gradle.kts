@@ -23,8 +23,8 @@ android {
         applicationId = "com.multica.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 31
-        versionName = "0.3.20"
+        versionCode = 39
+        versionName = "0.3.29"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -32,6 +32,12 @@ android {
         // 默认服务器 URL（用户首次进入设置页时会预填）
         // 想换服务器：改这里 → 重 build → 重装 APP 即可（会清掉旧 prefs）
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://172.26.28.80:9090\"")
+
+        // v0.3.29: 内网地址（老板需求 — 内网优先）
+        buildConfigField("String", "DEFAULT_LAN_URL", "\"http://172.26.28.80:9090\"")
+
+        // v0.3.29: 域名地址（老板需求 — 内网不通 fallback）
+        buildConfigField("String", "DEFAULT_WAN_URL", "\"https://multica.299970.xyz\"")
 
         // 本地 PAT 从 local.properties 读（不 commit 到 git）
         // 自用快捷配置；不再需要每次启动手动输入 token

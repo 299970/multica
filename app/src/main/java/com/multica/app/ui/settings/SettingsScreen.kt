@@ -70,11 +70,36 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            // v0.3.29: 内网地址（老板需求 — 内网优先）
+            OutlinedTextField(
+                value = s.lanUrl,
+                onValueChange = vm::setLanUrl,
+                label = { Text("内网地址（优先）") },
+                placeholder = { Text("http://172.26.28.80:9090") },
+                supportingText = { Text("内网连通时使用；失败自动 fallback 到域名", style = MaterialTheme.typography.bodySmall) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // v0.3.29: 域名地址（老板需求 — 内网不通时使用）
+            OutlinedTextField(
+                value = s.wanUrl,
+                onValueChange = vm::setWanUrl,
+                label = { Text("域名地址（fallback）") },
+                placeholder = { Text("https://multica.299970.xyz") },
+                supportingText = { Text("内网不通时使用（HTTPS）", style = MaterialTheme.typography.bodySmall) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // v0.3.29: 兼容字段（保留，万一老板想直接指定一个 URL）
             OutlinedTextField(
                 value = s.serverUrl,
                 onValueChange = vm::setServerUrl,
-                label = { Text("Server URL") },
-                placeholder = { Text("http://192.168.1.10:8080") },
+                label = { Text("Server URL (兼容字段，可选)") },
+                placeholder = { Text("如不填则自动选内网/域名") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier = Modifier.fillMaxWidth(),

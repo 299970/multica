@@ -36,6 +36,8 @@ data class DashboardUiState(
     val issues: List<Issue> = emptyList(),
     val daemonStatus: DaemonStatus? = null,
     val wsState: WsState = WsState.Disconnected,
+    // === v0.3.29 NetworkManager 网络状态 ===
+    val netState: com.multica.app.data.net.NetworkManager.NetState = com.multica.app.data.net.NetworkManager.NetState.Unknown,
     // === Boss Tab 数据 ===
     val bossInbox: List<InboxItem> = emptyList(),                  // 全部通知
     val bossMyIssues: List<Issue> = emptyList(),                    // @will / assignee = me
@@ -43,9 +45,18 @@ data class DashboardUiState(
     val bossChatMessages: List<InboxItem> = emptyList(),           // chat 消息（type=chat/new_comment）
 ) {
     /** Boss Tab 计数（显示在 Tab 标题上） */
-    // v0.3.19: bossCount 顶 tab 计数 = 只算**未读** inbox（已客户端过滤）+ myIssues + review
-    // 之前 bug：count { !it.read } + inbox.size 双重计入（inbox 已未读，但再 count 一遍 → 数字翻倍 100 → 800+）
-    val bossCount: Int get() = bossInbox.size + bossMyIssues.size + bossReviewIssues.size
+    // v0.3.21: bossCount = 实际显示的 4 个 section 总数
+    //   - @will: bossMyIssues
+    //   - 需要审核: bossReviewIssues
+    //   - Chat 消息: bossChatMessages
+    //   - Inbox 通知: bossInbox 中非 chat 且无 issueId 的（与 BossTab 渲染逻辑一致）
+    // 修 v0.3.19/20 的不一致：之前 bossCount = bossInbox.size + myIssues + review = 197
+    // 但 inbox 里有 issueId != null 的项没在 Boss Tab 显示（issue 有自己的详情页）→ 数字虚高
+    val bossCount: Int get() =
+        bossMyIssues.size +
+        bossReviewIssues.size +
+        bossChatMessages.size +
+        bossInbox.count { !it.isChat && it.issueId == null }
 
     /** v0.3.13: runtimes tab 数量按 host 数算（一台主机一个卡片） */
     /** v0.3.18: 排除 done/cancelled 的活跃 issue 数（用于顶部 tab 计数） */
@@ -75,12 +86,14 @@ class DashboardViewModel(
     private val app: Application,
     private val repo: MulticaRepository,
     private val settings: SettingsRepository,
+    private val net: com.multica.app.data.net.NetworkManager,
 ) : ViewModel() {
 
     // v0.3.20: 上一次状态快照（用于 diff 状态变化 → 播放声音）
     private data class PrevState(
         val runtimeStates: Map<String, String> = emptyMap(),  // id -> state
         val agentStates: Map<String, String> = emptyMap(),    // id -> state
+        val issueStates: Map<String, String> = emptyMap(),    // id -> status (v0.3.21 任务开始/结束声音)
     )
     private var prev: PrevState = PrevState()
 
@@ -122,30 +135,47 @@ class DashboardViewModel(
         viewModelScope.launch {
             repo.wsState.collect { s -> _state.update { it.copy(wsState = s) } }
         }
-        // === v0.3.10 兜底：每 3s 主动 poll runtimes + agents + issues ===
+        // === v0.3.29 观察 NetworkManager 网络状态 + endpoint 切换 ===
+        viewModelScope.launch {
+            net.state.collect { st ->
+                _state.update { it.copy(netState = st) }
+                // endpoint 切换时 rebuild repo（用当前 base url）
+                val url = when (st) {
+                    is com.multica.app.data.net.NetworkManager.NetState.Internal -> st.url
+                    is com.multica.app.data.net.NetworkManager.NetState.External -> st.url
+                    else -> null
+                }
+                if (url != null) {
+                    repo.onEndpointChanged(url)
+                }
+            }
+        }
+        // === v0.3.10/25 兜底：每 3s 主动 poll runtimes + agents + issues + 触发声音检测 ===
         // （v0.3.10 老板需求：agent 状态更新不够实时；
-        //   缩短到 3s + 同时拉 issues 用来推算 in_progress agent 工作状态）
+        //   缩短到 3s + 同时拉 issues 用来推算 in_progress agent 工作状态；
+        //   v0.3.25 修：之前 polling 走的是 _state.update 路径，**没有调** detectStateChangesAndPlay，
+        //     所以状态变化永不触发声音 — 现在 polling 也调 detect）
         viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(3_000)
                 val slug = _state.value.activeWorkspaceSlug() ?: continue
-                viewModelScope.launch {
-                    val rR = repo.runtimes(slug)
-                    val aR = repo.agents(slug)
-                    val iR = repo.issues(slug)
-                    _state.update {
-                        it.copy(
-                            runtimes = rR.getOrNull() ?: it.runtimes,
-                            agents = aR.getOrNull() ?: it.agents,
-                            issues = iR.getOrNull() ?: it.issues,
-                        )
-                    }
+                val rR = repo.runtimes(slug)
+                val aR = repo.agents(slug)
+                val iR = repo.issues(slug)
+                val r = rR.getOrNull() ?: _state.value.runtimes
+                val a = aR.getOrNull() ?: _state.value.agents
+                val i = iR.getOrNull() ?: _state.value.issues
+                _state.update {
+                    it.copy(runtimes = r, agents = a, issues = i)
                 }
+                // v0.3.25: polling 也调声音检测
+                detectStateChangesAndPlay(r, a, i)
             }
         }
         // 观察 WS 事件 → 触发 reload
         viewModelScope.launch {
             repo.wsEvents.collect { e ->
+                android.util.Log.d("MulticaSound", "WS event: $e")
                 if (e.isIssue || e.isAgent || e.isRuntime) {
                     refresh()
                 }
@@ -155,6 +185,9 @@ class DashboardViewModel(
         if (settings.current.isConfigured) {
             repo.startWs()
         }
+        // v0.3.23: 启动时**强制**播一次"启动音" — 让老板能立刻确认声音系统工作
+        android.util.Log.d("MulticaSound", "init: playing startup ding")
+        NotificationSound.ding(app)
     }
 
     fun refresh() {
@@ -235,7 +268,8 @@ class DashboardViewModel(
             // v0.3.20: 状态变化 diff + 播放声音
             val currentRuntimes = runtimeR.getOrNull().orEmpty()
             val currentAgents = agentsR.getOrNull().orEmpty()
-            detectStateChangesAndPlay(currentRuntimes, currentAgents)
+            val currentIssues = issuesR.getOrNull() ?: emptyList()
+            detectStateChangesAndPlay(currentRuntimes, currentAgents, currentIssues)
             _state.update {
                 it.copy(
                     bossInbox = allInbox,
@@ -255,36 +289,68 @@ class DashboardViewModel(
     }
 
     /**
-     * v0.3.20: diff 上次/本次状态
-     *  - runtime 状态从非 online → online  → 叮（上线）
-     *  - runtime 状态从 online → 非 online → 叮（离线；用一个声音）
-     *  - agent 状态从非 busy → busy       → 叮（任务开始）
-     *  - agent 状态从 busy → 非 busy      → 嘟（任务结束）
+     * v0.3.20/21: diff 上次/本次状态
+     *  - runtime 状态变化（任何变化）→ 叮（上线/离线/重启）
+     *  - agent 状态从非 busy → busy       → 叮（agent 工作；备用）
+     *  - agent 状态从 busy → 非 busy      → 嘟
+     *  - issue 状态从非 in_progress → in_progress → 叮（任务开始 — 老板 2026-06-08 反馈）
+     *  - issue 状态从 in_progress → done/cancelled → 嘟（任务结束）
+     *
+     *  v0.3.21 修：之前 server agent.state 永远 "idle"，agent 状态变化永不触发
+     *  改为 **issue 状态变化**触发声音（issue 状态才会真正变化）
      */
-    private fun detectStateChangesAndPlay(runtimes: List<Runtime>, agents: List<Agent>) {
+    private fun detectStateChangesAndPlay(runtimes: List<Runtime>, agents: List<Agent>, issues: List<Issue> = emptyList()) {
         val newRuntimeStates = runtimes.associate { it.id to it.state }
         val newAgentStates = agents.associate { it.id to it.state }
+        val newIssueStates = issues.associate { it.id to it.status }
 
-        // runtime 状态变化
+        android.util.Log.d("MulticaSound", "detect: runtimes=${newRuntimeStates.size} agents=${newAgentStates.size} issues=${newIssueStates.size}")
+
+        // runtime 状态变化（任何变化都叮）
         for ((id, newSt) in newRuntimeStates) {
             val oldSt = prev.runtimeStates[id]
             if (oldSt != null && oldSt != newSt) {
-                NotificationSound.ding(app)  // 上线/离线都叮（老板需求）
+                android.util.Log.d("MulticaSound", "RUNTIME CHANGED $id: $oldSt -> $newSt → ding")
+                NotificationSound.ding(app)
             }
         }
-        // agent 状态变化
+        // agent 状态变化（备用；server 现在不真返回 busy 所以基本不触发）
         for ((id, newSt) in newAgentStates) {
             val oldSt = prev.agentStates[id]
             if (oldSt != null && oldSt != newSt) {
                 val wasBusy = oldSt in setOf("busy", "in_progress", "working", "running", "active")
                 val isBusy = newSt in setOf("busy", "in_progress", "working", "running", "active")
+                android.util.Log.d("MulticaSound", "AGENT CHANGED $id: $oldSt -> $newSt (wasBusy=$wasBusy isBusy=$isBusy)")
                 when {
-                    !wasBusy && isBusy -> NotificationSound.ding(app)   // 任务开始 → 叮
-                    wasBusy && !isBusy -> NotificationSound.dong(app)   // 任务结束 → 嘟
+                    !wasBusy && isBusy -> NotificationSound.ding(app)
+                    wasBusy && !isBusy -> NotificationSound.dong(app)
                 }
             }
         }
-        prev = PrevState(newRuntimeStates, newAgentStates)
+        // v0.3.21: issue 状态变化（任务开始/结束的主信号源）
+        for ((id, newSt) in newIssueStates) {
+            val oldSt = prev.issueStates[id]
+            if (oldSt != null && oldSt != newSt) {
+                val wasInProgress = oldSt == "in_progress"
+                val isInProgress = newSt == "in_progress"
+                val wasDone = oldSt in setOf("done", "cancelled")
+                val isDone = newSt in setOf("done", "cancelled")
+                android.util.Log.d("MulticaSound", "ISSUE CHANGED $id: $oldSt -> $newSt (inProg=$isInProgress done=$isDone)")
+                when {
+                    // 进入 in_progress = 任务开始 → 叮
+                    !wasInProgress && isInProgress -> {
+                        android.util.Log.d("MulticaSound", "  → DING (task started)")
+                        NotificationSound.ding(app)
+                    }
+                    // 从 in_progress 退到 done/cancelled = 任务结束 → 嘟
+                    wasInProgress && isDone -> {
+                        android.util.Log.d("MulticaSound", "  → DONG (task done)")
+                        NotificationSound.dong(app)
+                    }
+                }
+            }
+        }
+        prev = PrevState(newRuntimeStates, newAgentStates, newIssueStates)
     }
 
     private fun applyMock() {
