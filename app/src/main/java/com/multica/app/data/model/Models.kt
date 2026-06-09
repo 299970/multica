@@ -4,6 +4,32 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /* ============================================================
+ * v0.3.34 老板 2026-06-09 新增：每日 token 用量（柱状图数据源）
+ * server 端可能从 /api/dashboard/usage 或 /api/usage/daily 或 /api/tokens/daily
+ * 任一 endpoint 返回；这里用 flexible 字段名 + 默认值容错
+ * ============================================================ */
+@Serializable
+data class DailyUsage(
+    val date: String = "",          // YYYY-MM-DD
+    @SerialName("input_tokens") val inputTokens: Long = 0,
+    @SerialName("output_tokens") val outputTokens: Long = 0,
+    val tokens: Long = 0,           // 通用字段（部分 endpoint 直接给）
+    val cost: Double = 0.0,
+) {
+    val total: Long get() = if (tokens > 0) tokens else (inputTokens + outputTokens)
+}
+
+@Serializable
+data class DailyUsageResponse(
+    val days: List<DailyUsage> = emptyList(),
+    val data: List<DailyUsage> = emptyList(),
+    val items: List<DailyUsage> = emptyList(),
+    val usage: List<DailyUsage> = emptyList(),
+) {
+    val list: List<DailyUsage> get() = days.ifEmpty { data }.ifEmpty { items }.ifEmpty { usage }
+}
+
+/* ============================================================
  *  Multica 数据模型
  *  - 字段命名遵循服务器实际返回的 snake_case (部分驼峰兼容)
  *  - 所有 optional 字段用可空类型 + 默认值

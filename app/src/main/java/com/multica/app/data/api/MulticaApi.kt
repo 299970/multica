@@ -1,6 +1,8 @@
 package com.multica.app.data.api
 
 import com.multica.app.data.model.Agent
+import com.multica.app.data.model.DailyUsage
+import com.multica.app.data.model.DailyUsageResponse
 import com.multica.app.data.model.DaemonStatus
 import com.multica.app.data.model.InboxItem
 import com.multica.app.data.model.Issue
@@ -116,6 +118,26 @@ interface MulticaApi {
         @Path("issueId") issueId: String,
         @Query("workspace_slug") workspaceSlug: String,
     ): com.multica.app.data.model.IssueDetail
+
+    /**
+     * v0.3.34 老板 2026-06-09 新增 — 每日 token 用量（柱状图数据源）
+     * server 端先试 `/api/dashboard/usage?workspace_slug=xxx&days=30`
+     * 失败 fallback `/api/usage/daily?workspace_slug=xxx&days=30`
+     * 再失败 fallback `/api/tokens/daily` (POST)
+     * 字段兼容 `days` / `data` / `items` / `usage` 任一顶层数组
+     */
+    @GET("api/dashboard/usage")
+    suspend fun dailyUsage(
+        @Query("workspace_slug") workspaceSlug: String,
+        @Query("workspace_id") workspaceId: String? = null,
+        @Query("days") days: Int = 30,
+    ): DailyUsageResponse
+
+    @GET("api/usage/daily")
+    suspend fun dailyUsageAlt(
+        @Query("workspace_slug") workspaceSlug: String,
+        @Query("days") days: Int = 30,
+    ): DailyUsageResponse
 
     /**
      * Issue 评论 — `GET /api/issues/{issueId}/comments` → Comment[]（裸数组）

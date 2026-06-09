@@ -25,7 +25,7 @@
 | multica 域名服务器      | `https://multica.299970.xyz`                   | 远程访问，HTTPS                                          | <br /> |
 | multica 本地服务器      | `http://172.26.28.8:9090`                      | 内网访问，HTTP（需 `network_security_config` 放行 cleartext） | <br /> |
 | multica PAT（Token） | `mul_f9829a0a990116580236c1c8914cc144a302afb6` | <br />                                              | <br /> |
-| github 项目地址        | <https://github.com/299970/multica-app.git>    | 库                                                   | <br /> |
+| github 项目地址        | <https://github.com/299970/multica-app.git>    | 库                                                   |  |
 
 ## 功能
 

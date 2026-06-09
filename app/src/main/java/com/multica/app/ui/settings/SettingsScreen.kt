@@ -95,15 +95,8 @@ fun SettingsScreen(
             )
 
             // v0.3.29: 兼容字段（保留，万一老板想直接指定一个 URL）
-            OutlinedTextField(
-                value = s.serverUrl,
-                onValueChange = vm::setServerUrl,
-                label = { Text("Server URL (兼容字段，可选)") },
-                placeholder = { Text("如不填则自动选内网/域名") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // v0.3.30: 删掉了"Server URL 兼容字段"（老板反馈：和内网地址重复）
+            // 现在只用：内网地址 / 域名地址 2 个字段
 
             OutlinedTextField(
                 value = s.pat,

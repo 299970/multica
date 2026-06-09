@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,29 +75,30 @@ fun DashboardScreen(
                 // v0.3.21: 简化 TopAppBar（去掉状态文字行）— 让顶部不占大块空间
                 TopAppBar(
                     title = {
-                        // v0.3.29: 标题可点击 → 弹工作区 dropdown
-                        Box {
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(wsBg)
-                                    .clickable { wsMenuOpen = true }
-                                    .padding(horizontal = 10.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = wsName,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowDropDown,
-                                    contentDescription = "切换工作区",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
+                        // v0.3.30: 标题 + 探测转圈 + 工作区 dropdown
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(wsBg)
+                                        .clickable { wsMenuOpen = true }
+                                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = wsName,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = "切换工作区",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
                             DropdownMenu(
                                 expanded = wsMenuOpen,
                                 onDismissRequest = { wsMenuOpen = false },
@@ -134,6 +136,16 @@ fun DashboardScreen(
                                         )
                                     }
                                 }
+                            }
+                            }  // close Box (v0.3.30: 之前少一个 close)
+                            // v0.3.30: 标题右边转圈动画（探测中显示）
+                            if (s.netProbing) {
+                                Spacer(Modifier.size(8.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
+                                )
                             }
                         }
                     },
@@ -211,12 +223,14 @@ fun DashboardScreen(
     }
 }
 
-/** v0.3.29: 把网络状态翻译成 (底色, 状态文字)
- *  老板需求 2026-06-08: 内网=绿，域名=蓝，无法连接=红 */
+/** v0.3.29/30: 把网络状态翻译成 (底色, 状态文字)
+ *  老板需求 2026-06-08: 内网=绿，域名=蓝，无法连接=红
+ *  v0.3.30: 加 Probing 分支（探测中也是灰色显示，但转圈动画会显示） */
 private fun wsIndicator(net: com.multica.app.data.net.NetworkManager.NetState, isMock: Boolean): Pair<Color, String> = when {
     isMock -> Color(0xFF9CA3AF) to "示例数据"
     net is com.multica.app.data.net.NetworkManager.NetState.Internal -> Color(0xFF22C55E) to "内网 ●"  // 绿
     net is com.multica.app.data.net.NetworkManager.NetState.External -> Color(0xFF3B82F6) to "域名 ●"  // 蓝
     net is com.multica.app.data.net.NetworkManager.NetState.Failed -> Color(0xFFEF4444) to "断开 ✕"   // 红
-    else -> Color(0xFF9CA3AF) to "检测中…"                                                     // 灰
+    net is com.multica.app.data.net.NetworkManager.NetState.Probing -> Color(0xFFEAB308) to "探测中…" // 黄
+    else -> Color(0xFF9CA3AF) to "检测中…"                                                          // 灰（Unknown）
 }

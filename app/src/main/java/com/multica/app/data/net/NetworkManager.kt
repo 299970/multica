@@ -52,6 +52,10 @@ class NetworkManager(
     private val _state = MutableStateFlow<NetState>(NetState.Unknown)
     val state: StateFlow<NetState> = _state.asStateFlow()
 
+    // v0.3.30: 探测中标记（UI 显示转圈动画）
+    private val _probing = MutableStateFlow(false)
+    val probing: StateFlow<Boolean> = _probing.asStateFlow()
+
     /**
      * 当前业务用的 baseUrl（无尾 /）。
      * UI 应当用 state 决定颜色显示；Repository 用 currentBaseUrl 实际发请求。
@@ -66,6 +70,10 @@ class NetworkManager(
                     .ifBlank { settings.current.wanUrl }
                     .ifBlank { settings.current.serverUrl }
                     .trimEnd('/')
+                is NetState.Probing -> settings.current.lanUrl
+                    .ifBlank { settings.current.wanUrl }
+                    .ifBlank { settings.current.serverUrl }
+                    .trimEnd('/')
                 is NetState.Unknown -> settings.current.serverUrl.trimEnd('/')
             }
         }
@@ -77,13 +85,60 @@ class NetworkManager(
             else -> bizClient
         }
 
-    /** 启动后台 probe 循环 + 立即探测一次 */
+    /**
+     * v0.3.30 老板 2026-06-09 新需求：
+     *  - 启动优先连内网
+     *  - **如果内网 1 分钟还没成功，自动切到域名**
+     *  - 启动后每 60 秒重探一次（看是否要切回内网）
+     */
     fun start() {
         scope.launch(Dispatchers.IO) {
-            probe()  // 启动立即探
+            // === 阶段 1: 启动试内网 1 分钟 ===
+            _probing.value = true
+            _state.value = NetState.Probing  // UI 显示转圈
+            Log.d(tag, "启动：先试内网（最长 60s）")
+            val lan = settings.current.lanUrl.trimEnd('/').ifBlank { null }
+            val wan = settings.current.wanUrl.trimEnd('/').ifBlank { null }
+
+            if (lan != null) {
+                // 试 1 分钟：每 2 秒一次（30 次机会）
+                val deadline = System.currentTimeMillis() + 60_000
+                var gotLan = false
+                while (System.currentTimeMillis() < deadline) {
+                    if (probeOne(lan)) {
+                        Log.d(tag, "✓ 1 分钟内内网 OK, using 内网: $lan")
+                        _state.value = NetState.Internal(lan)
+                        _probing.value = false
+                        gotLan = true
+                        break
+                    }
+                    delay(2_000)
+                }
+                if (!gotLan) {
+                    Log.w(tag, "✗ 1 分钟内内网没通，fallback 到域名")
+                }
+            }
+
+            // === 阶段 2: 内网 1 分钟没通，强制切域名 ===
+            if (_state.value !is NetState.Internal && wan != null) {
+                if (probeOne(wan)) {
+                    Log.d(tag, "✓ 域名 OK, using 域名: $wan")
+                    _state.value = NetState.External(wan)
+                } else {
+                    Log.w(tag, "✗ 域名也不通，mark Failed")
+                    _state.value = NetState.Failed
+                }
+            } else if (_state.value !is NetState.Internal) {
+                _state.value = NetState.Failed
+            }
+            _probing.value = false
+
+            // === 阶段 3: 60s 周期重探（看内网是否恢复，恢复了切回） ===
             while (true) {
                 delay(60_000)
-                probe()  // 60s 重探
+                _probing.value = true
+                probe()  // 用原本的 probe 逻辑（lan → wan → fallback）
+                _probing.value = false
             }
         }
     }
@@ -123,20 +178,40 @@ class NetworkManager(
         _state.value = NetState.Failed
     }
 
-    private suspend fun probeOne(base: String): Boolean = withTimeoutOrNull(2_500) {
+    /**
+     * v0.3.32 老板 2026-06-09 需求："内网=绿，域名=蓝，无法连接=红"
+     *  - 之前用 /api/me，server 返回 401/404/500 → 标红
+     *  - 现在改成**最宽松判断**：只要 server 回了**任何 HTTP 响应**（不是 connect refused / timeout）= 绿色
+     *  - 5xx 也算通（业务层错算 server 活着）
+     *  - 真正"无法连接"只有 connect refused / timeout（IOException / SocketTimeoutException）
+     */
+    private suspend fun probeOne(base: String): Boolean = withTimeoutOrNull(3_500) {
         runCatching {
+            val pat = settings.current.pat
             val req = Request.Builder()
-                .url("$base/api/health")
+                .url("$base/api/me")
                 .header("Accept", "application/json")
+                .apply { if (pat.isNotBlank()) header("Authorization", "Bearer $pat") }
                 .build()
             probeClient.newCall(req).execute().use { resp ->
-                resp.isSuccessful
+                Log.d(tag, "probe $base → HTTP ${resp.code} (reachable, treating as UP)")
+                // 任何 HTTP 响应 = server 在监听 9090 = "endpoint 可达"
+                // connect refused / read timeout 才返回 false（runCatching catch 不到 IOException）
+                true
             }
-        }.getOrDefault(false)
-    } ?: false
+        }.getOrElse { e ->
+            Log.d(tag, "probe $base → ${e.javaClass.simpleName}: ${e.message} (network error, DOWN)")
+            false
+        }
+    } ?: run {
+        Log.d(tag, "probe $base → timeout (DOWN)")
+        false
+    }
 
     sealed class NetState {
         object Unknown : NetState()
+        /** v0.3.30: 正在探测（启动 1 分钟内） */
+        object Probing : NetState()
         data class Internal(val url: String) : NetState()
         data class External(val url: String) : NetState()
         object Failed : NetState()

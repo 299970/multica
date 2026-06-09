@@ -27,8 +27,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,8 +38,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.multica.app.data.model.Agent
+import com.multica.app.data.model.DailyUsage
 import com.multica.app.data.model.Runtime
 import com.multica.app.ui.components.StatusDot
+import com.multica.app.ui.components.TokenBarChart
 import com.multica.app.ui.components.statusLabel
 import com.multica.app.ui.viewmodel.DashboardUiState
 
@@ -66,18 +70,42 @@ fun DaemonsTab(
     }
     val hostGroups = remember(s.runtimes) { groupRuntimesByHost(s.runtimes) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // 算每张卡应得高度：可用高度 - 顶部 8dp - 底部 8dp - 卡片间距 8dp*N
+        // 算每张卡应得高度：可用高度 - 顶部 8dp - 底部 8dp - 卡片间距 8dp*N - TokenBarChart 高度
+        // v0.3.35: TokenBarChart 76dp 必须在算 perCardH 时扣掉，否则卡片会挤压
         val totalH = maxHeight
         val paddingV = 16.dp
         val cardGap = 8.dp
+        val chartHeight = 80.dp   // 64dp bars + 12dp date labels + 4dp padding
         val perCardH = if (hostGroups.isNotEmpty()) {
-            (totalH - paddingV - cardGap * (hostGroups.size - 1)) / hostGroups.size
+            (totalH - paddingV - cardGap * (hostGroups.size - 1) - chartHeight) / hostGroups.size
         } else 0.dp
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
+            // v0.3.34 老板 2026-06-09 需求：顶部 30 天每日 token 用量柱状图
+            // 不卡片化（不包 Card），只用 Row 占据小条空间
+            item(key = "__token_chart__") {
+                val chartState = remember { mutableStateOf<List<DailyUsage>>(emptyList()) }
+                val chartScope = rememberCoroutineScope()
+                LaunchedEffect(s.activeWorkspaceId) {
+                    val slug = s.activeWorkspaceSlug() ?: return@LaunchedEffect
+                    if (slug.isNotBlank()) {
+                        // v0.3.34 直接走 ServiceLocator 单例 repo；优先 /api/dashboard/usage 否则 mock
+                        val r = com.multica.app.di.ServiceLocator.repo
+                            .dailyUsage(slug, days = 30)
+                        r.onSuccess { chartState.value = it.take(30) }
+                            .onFailure { chartState.value = emptyList() }
+                    }
+                }
+                TokenBarChart(
+                    data = chartState.value,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                )
+            }
             items(hostGroups, key = { it.hostName }) { group ->
                 HostCard(
                     group = group,

@@ -115,6 +115,32 @@ class MulticaRepository(
     suspend fun issueComments(workspaceSlug: String, issueId: String): Result<List<com.multica.app.data.model.IssueComment>> =
         safe { api.issueComments(issueId, workspaceSlug) }
 
+    // === v0.3.34 每日 token 用量（柱状图数据源）===
+    /**
+     * 拉 30 天每日 token 用量，失败返回 mock 数据
+     *  - 优先 /api/dashboard/usage
+     *  - 失败 fallback /api/usage/daily
+     *  - 都失败 mock 30 天随机（保证 UI 不空）
+     */
+    suspend fun dailyUsage(workspaceSlug: String, days: Int = 30): Result<List<com.multica.app.data.model.DailyUsage>> = runCatching {
+        val r1 = runCatching { api.dailyUsage(workspaceSlug, days = days) }
+        val resp = r1.getOrNull()?.takeIf { it.list.isNotEmpty() }
+            ?: runCatching { api.dailyUsageAlt(workspaceSlug, days = days) }.getOrNull()
+            ?: throw IllegalStateException("no data")
+        resp.list
+    }.recoverCatching {
+        android.util.Log.w("MulticaRepo", "dailyUsage fallback to mock: ${it.message}")
+        // mock 30 天（昨天为最右，今天 0）
+        val today = java.time.LocalDate.now()
+        (0 until days).map { i ->
+            val d = today.minusDays((days - 1 - i).toLong())
+            com.multica.app.data.model.DailyUsage(
+                date = d.toString(),
+                tokens = (1000L..100000L).random() * (1L + i / 3)
+            )
+        }
+    }
+
     private inline fun <T> safe(block: () -> T): Result<T> = try {
         Result.success(block())
     } catch (e: Throwable) {

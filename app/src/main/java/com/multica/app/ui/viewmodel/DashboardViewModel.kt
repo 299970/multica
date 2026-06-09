@@ -38,6 +38,8 @@ data class DashboardUiState(
     val wsState: WsState = WsState.Disconnected,
     // === v0.3.29 NetworkManager 网络状态 ===
     val netState: com.multica.app.data.net.NetworkManager.NetState = com.multica.app.data.net.NetworkManager.NetState.Unknown,
+    // === v0.3.30 NetworkManager 探测中（UI 转圈） ===
+    val netProbing: Boolean = false,
     // === Boss Tab 数据 ===
     val bossInbox: List<InboxItem> = emptyList(),                  // 全部通知
     val bossMyIssues: List<Issue> = emptyList(),                    // @will / assignee = me
@@ -150,6 +152,12 @@ class DashboardViewModel(
                 }
             }
         }
+        // === v0.3.30 观察 probing 状态（UI 转圈） ===
+        viewModelScope.launch {
+            net.probing.collect { p ->
+                _state.update { it.copy(netProbing = p) }
+            }
+        }
         // === v0.3.10/25 兜底：每 3s 主动 poll runtimes + agents + issues + 触发声音检测 ===
         // （v0.3.10 老板需求：agent 状态更新不够实时；
         //   缩短到 3s + 同时拉 issues 用来推算 in_progress agent 工作状态；
@@ -200,6 +208,13 @@ class DashboardViewModel(
                 return@launch
             }
             val meR = repo.me()
+            // v0.3.33: 如果真实 API 调成功，强制标绿（不依赖 NetworkManager probe）
+            // 解决"内网能连也正常使用但显示红色"问题
+            meR.onSuccess {
+                val url = repo.serverUrl
+                _state.update { it.copy(netState = com.multica.app.data.net.NetworkManager.NetState.Internal(url)) }
+                android.util.Log.d("MulticaNet", "refresh: me() 成功 → 强制标绿 url=$url")
+            }
             val wsR = repo.workspaces()
             val wsList = wsR.getOrNull().orEmpty()
             // 用 slug 优先（多 workspace 友好）；没填 slug 时取第一个
