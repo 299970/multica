@@ -74,6 +74,20 @@ fun AgentsTab(
         return
     }
     val rtMap = remember(runtimes) { runtimes.associateBy { it.id } }
+    // v0.3.39 老板 2026-06-09 反馈：v0.3.37 只算 in_progress 时，busy agent 只有 1 个 "todo"
+    // 任务时也显示 0（server 在 agent 真正开始前不切到 in_progress）
+    //  v0.3.37 修正：去掉 in_review / blocked（不算 agent 任务）— 保留
+    //  v0.3.39 扩展：把 "todo" 也算进去（已分配、即将开始做的）
+    //  同时用 assigneeName 兜底（某些 issue 只返 name 不返 id 时也能匹配）
+    val taskCountByAgent = remember(s.issues, s.agents) {
+        val nameToId = s.agents.associate { it.name to it.id }
+        s.issues
+            .filter { it.status == "in_progress" || it.status == "todo" }
+            .groupBy { issue ->
+                issue.assigneeId ?: nameToId[issue.assigneeName] ?: "_unknown"
+            }
+            .mapValues { it.value.size }
+    }
     // v0.3.15: 取消 in_progress / in_review 推算 — 改用 server 真实状态
     val sorted = remember(s.agents, rtMap) {
         s.agents.sortedWith(compareBy(
@@ -103,6 +117,7 @@ fun AgentsTab(
                     a = a,
                     runtime = rtMap[a.runtimeId],
                     minHeight = perRowH,  // v0.3.14: 自适应高度
+                    taskCount = taskCountByAgent[a.id] ?: 0,  // v0.3.36: 当前任务数
                     modifier = Modifier.animateItemPlacement(animationSpec = tween(350)),
                 )
             }
@@ -115,6 +130,7 @@ private fun AgentCard(
     a: Agent,
     runtime: Runtime?,
     minHeight: androidx.compose.ui.unit.Dp = 0.dp,
+    taskCount: Int = 0,  // v0.3.36: 当前 in_progress/in_review/blocked issue 数量
     modifier: Modifier = Modifier,
 ) {
     val rtOffline = runtime != null && !isOnline(runtime.state)
@@ -187,6 +203,7 @@ private fun AgentCard(
                 )
             }
             // v0.3.15 第 2 行：**头像 + 状态**（老板 2026-06-08 新需求）
+            // v0.3.36 第 2 行：头像加大 + **当前任务数量**（圆圈背景）
             val workText = when {
                 rtOffline -> "runtime 离线"
                 busy -> "工作中"
@@ -199,38 +216,66 @@ private fun AgentCard(
                 rtOffline -> Color(0xFFEF4444) // 红
                 else -> Color(0xFFA1A1A6)
             }
+            // v0.3.38 任务数量配色（老板 2026-06-09 要求）：
+            //   0   → 灰
+            //   1   → 蓝
+            //   2~4 → 橙
+            //   ≥5  → 红
+            val (taskBgColor, taskTextColor) = when {
+                taskCount == 0 -> Color(0xFF3A3A3C) to Color(0xFF8E8E93)
+                taskCount == 1 -> Color(0xFF0A84FF) to Color.White
+                taskCount in 2..4 -> Color(0xFFFF9F0A) to Color.White
+                else -> Color(0xFFFF3B30) to Color.White
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // 头像：multica 中 agent 的 avatar_url（如果 server 返了）
+                // v0.3.36: 头像尺寸加大 (24dp -> 48dp)
                 if (!a.avatarUrl.isNullOrBlank()) {
                     Avatar(
                         url = a.avatarUrl,
-                        size = 24.dp,
+                        size = 48.dp,
                         fallback = a.name.firstOrNull()?.toString() ?: "?",
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(Color(0xFF3A3A3C)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = a.name.firstOrNull()?.toString() ?: "?",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFF5F5F7),
                         )
                     }
                 }
+                // 状态文字（先状态，再数量 — v0.3.38 调整）
                 Text(
                     text = workText,
                     style = MaterialTheme.typography.labelMedium,
                     color = workColor,
                     fontWeight = if (busy) FontWeight.SemiBold else FontWeight.Normal,
                 )
+                // v0.3.38: 任务数量圆圈移到状态右边，并加大尺寸（20dp -> 28dp）
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(taskBgColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = taskCount.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = taskTextColor,
+                    )
+                }
             }
             // v0.3.15 第 3 行：**上次任务时间**（v0.3.13 加的完整年月日时分秒）
             val lastTime = formatFullDateTime(a.updatedAt)

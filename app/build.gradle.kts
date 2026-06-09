@@ -23,8 +23,8 @@ android {
         applicationId = "com.multica.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 45
-        versionName = "0.3.35"
+        versionCode = 49
+        versionName = "0.3.39"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
