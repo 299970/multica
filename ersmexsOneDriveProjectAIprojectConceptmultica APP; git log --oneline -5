@@ -1,0 +1,141 @@
+warning: in the working copy of 'app/build.gradle.kts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/src/main/java/com/multica/app/ui/dashboard/tabs/AgentsTab.kt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/requirements.md', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/app/build.gradle.kts b/app/build.gradle.kts[m
+[1mindex bf5b9ac..ead5e72 100644[m
+[1m--- a/app/build.gradle.kts[m
+[1m+++ b/app/build.gradle.kts[m
+[36m@@ -23,8 +23,8 @@[m [mandroid {[m
+         applicationId = "com.multica.app"[m
+         minSdk = 24[m
+         targetSdk = 34[m
+[31m-        versionCode = 45[m
+[31m-        versionName = "0.3.35"[m
+[32m+[m[32m        versionCode = 49[m
+[32m+[m[32m        versionName = "0.3.39"[m
+ [m
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"[m
+         vectorDrawables { useSupportLibrary = true }[m
+[1mdiff --git a/app/src/main/java/com/multica/app/ui/dashboard/tabs/AgentsTab.kt b/app/src/main/java/com/multica/app/ui/dashboard/tabs/AgentsTab.kt[m
+[1mindex 4ca03d0..200c1a0 100644[m
+[1m--- a/app/src/main/java/com/multica/app/ui/dashboard/tabs/AgentsTab.kt[m
+[1m+++ b/app/src/main/java/com/multica/app/ui/dashboard/tabs/AgentsTab.kt[m
+[36m@@ -74,6 +74,20 @@[m [mfun AgentsTab([m
+         return[m
+     }[m
+     val rtMap = remember(runtimes) { runtimes.associateBy { it.id } }[m
+[32m+[m[32m    // v0.3.39 老板 2026-06-09 反馈：v0.3.37 只算 in_progress 时，busy agent 只有 1 个 "todo"[m
+[32m+[m[32m    // 任务时也显示 0（server 在 agent 真正开始前不切到 in_progress）[m
+[32m+[m[32m    //  v0.3.37 修正：去掉 in_review / blocked（不算 agent 任务）— 保留[m
+[32m+[m[32m    //  v0.3.39 扩展：把 "todo" 也算进去（已分配、即将开始做的）[m
+[32m+[m[32m    //  同时用 assigneeName 兜底（某些 issue 只返 name 不返 id 时也能匹配）[m
+[32m+[m[32m    val taskCountByAgent = remember(s.issues, s.agents) {[m
+[32m+[m[32m        val nameToId = s.agents.associate { it.name to it.id }[m
+[32m+[m[32m        s.issues[m
+[32m+[m[32m            .filter { it.status == "in_progress" || it.status == "todo" }[m
+[32m+[m[32m            .groupBy { issue ->[m
+[32m+[m[32m                issue.assigneeId ?: nameToId[issue.assigneeName] ?: "_unknown"[m
+[32m+[m[32m            }[m
+[32m+[m[32m            .mapValues { it.value.size }[m
+[32m+[m[32m    }[m
+     // v0.3.15: 取消 in_progress / in_review 推算 — 改用 server 真实状态[m
+     val sorted = remember(s.agents, rtMap) {[m
+         s.agents.sortedWith(compareBy([m
+[36m@@ -103,6 +117,7 @@[m [mfun AgentsTab([m
+                     a = a,[m
+                     runtime = rtMap[a.runtimeId],[m
+                     minHeight = perRowH,  // v0.3.14: 自适应高度[m
+[32m+[m[32m                    taskCount = taskCountByAgent[a.id] ?: 0,  // v0.3.36: 当前任务数[m
+                     modifier = Modifier.animateItemPlacement(animationSpec = tween(350)),[m
+                 )[m
+             }[m
+[36m@@ -115,6 +130,7 @@[m [mprivate fun AgentCard([m
+     a: Agent,[m
+     runtime: Runtime?,[m
+     minHeight: androidx.compose.ui.unit.Dp = 0.dp,[m
+[32m+[m[32m    taskCount: Int = 0,  // v0.3.36: 当前 in_progress/in_review/blocked issue 数量[m
+     modifier: Modifier = Modifier,[m
+ ) {[m
+     val rtOffline = runtime != null && !isOnline(runtime.state)[m
+[36m@@ -187,6 +203,7 @@[m [mprivate fun AgentCard([m
+                 )[m
+             }[m
+             // v0.3.15 第 2 行：**头像 + 状态**（老板 2026-06-08 新需求）[m
+[32m+[m[32m            // v0.3.36 第 2 行：头像加大 + **当前任务数量**（圆圈背景）[m
+             val workText = when {[m
+                 rtOffline -> "runtime 离线"[m
+                 busy -> "工作中"[m
+[36m@@ -199,38 +216,66 @@[m [mprivate fun AgentCard([m
+                 rtOffline -> Color(0xFFEF4444) // 红[m
+                 else -> Color(0xFFA1A1A6)[m
+             }[m
+[32m+[m[32m            // v0.3.38 任务数量配色（老板 2026-06-09 要求）：[m
+[32m+[m[32m            //   0   → 灰[m
+[32m+[m[32m            //   1   → 蓝[m
+[32m+[m[32m            //   2~4 → 橙[m
+[32m+[m[32m            //   ≥5  → 红[m
+[32m+[m[32m            val (taskBgColor, taskTextColor) = when {[m
+[32m+[m[32m                taskCount == 0 -> Color(0xFF3A3A3C) to Color(0xFF8E8E93)[m
+[32m+[m[32m                taskCount == 1 -> Color(0xFF0A84FF) to Color.White[m
+[32m+[m[32m                taskCount in 2..4 -> Color(0xFFFF9F0A) to Color.White[m
+[32m+[m[32m                else -> Color(0xFFFF3B30) to Color.White[m
+[32m+[m[32m            }[m
+             Row([m
+                 verticalAlignment = Alignment.CenterVertically,[m
+[31m-                horizontalArrangement = Arrangement.spacedBy(6.dp),[m
+[32m+[m[32m                horizontalArrangement = Arrangement.spacedBy(8.dp),[m
+             ) {[m
+[31m-                // 头像：multica 中 agent 的 avatar_url（如果 server 返了）[m
+[32m+[m[32m                // v0.3.36: 头像尺寸加大 (24dp -> 48dp)[m
+                 if (!a.avatarUrl.isNullOrBlank()) {[m
+                     Avatar([m
+                         url = a.avatarUrl,[m
+[31m-                        size = 24.dp,[m
+[32m+[m[32m                        size = 48.dp,[m
+                         fallback = a.name.firstOrNull()?.toString() ?: "?",[m
+                     )[m
+                 } else {[m
+                     Box([m
+                         modifier = Modifier[m
+[31m-                            .size(24.dp)[m
+[32m+[m[32m                            .size(48.dp)[m
+                             .clip(CircleShape)[m
+                             .background(Color(0xFF3A3A3C)),[m
+                         contentAlignment = Alignment.Center,[m
+                     ) {[m
+                         Text([m
+                             text = a.name.firstOrNull()?.toString() ?: "?",[m
+[31m-                            style = MaterialTheme.typography.labelSmall,[m
+[32m+[m[32m                            style = MaterialTheme.typography.titleMedium,[m
+[32m+[m[32m                            fontWeight = FontWeight.SemiBold,[m
+                             color = Color(0xFFF5F5F7),[m
+                         )[m
+                     }[m
+                 }[m
+[32m+[m[32m                // 状态文字（先状态，再数量 — v0.3.38 调整）[m
+                 Text([m
+                     text = workText,[m
+                     style = MaterialTheme.typography.labelMedium,[m
+                     color = workColor,[m
+                     fontWeight = if (busy) FontWeight.SemiBold else FontWeight.Normal,[m
+                 )[m
+[32m+[m[32m                // v0.3.38: 任务数量圆圈移到状态右边，并加大尺寸（20dp -> 28dp）[m
+[32m+[m[32m                Box([m
+[32m+[m[32m                    modifier = Modifier[m
+[32m+[m[32m                        .size(28.dp)[m
+[32m+[m[32m                        .clip(CircleShape)[m
+[32m+[m[32m                        .background(taskBgColor),[m
+[32m+[m[32m                    contentAlignment = Alignment.Center,[m
+[32m+[m[32m                ) {[m
+[32m+[m[32m                    Text([m
+[32m+[m[32m                        text = taskCount.toString(),[m
+[32m+[m[32m                        style = MaterialTheme.typography.labelMedium,[m
+[32m+[m[32m                        fontWeight = FontWeight.Bold,[m
+[32m+[m[32m                        color = taskTextColor,[m
+[32m+[m[32m                    )[m
+[32m+[m[32m                }[m
+             }[m
+             // v0.3.15 第 3 行：**上次任务时间**（v0.3.13 加的完整年月日时分秒）[m
+             val lastTime = formatFullDateTime(a.updatedAt)[m
+[1mdiff --git a/docs/requirements.md b/docs/requirements.md[m
+[1mindex 2b2fc56..975

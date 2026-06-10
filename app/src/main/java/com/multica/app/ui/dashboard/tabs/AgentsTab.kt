@@ -89,23 +89,25 @@ fun AgentsTab(
             .mapValues { it.value.size }
     }
     // v0.3.15: 取消 in_progress / in_review 推算 — 改用 server 真实状态
-    val sorted = remember(s.agents, rtMap) {
+    val sorted = remember(s.agents, rtMap, taskCountByAgent) {
         s.agents.sortedWith(compareBy(
-            { agentStatePriority(it, rtMap) },
+            { agentStatePriority(it, rtMap, taskCountByAgent[it.id] ?: 0) },
             { -it.minuteBucketSortKey },  // v0.3.12: 60秒 bucket 稳定排序
             { it.name },
         ))
     }
     // v0.3.14: 自适应高度 — 算每行卡应得高度（屏高 / 行数）
+    // v0.3.40: 横屏模式 — 宽度 > 600dp 时 3 列，否则 2 列
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val rows = (sorted.size + 1) / 2
+        val cols = if (maxWidth > 600.dp) 3 else 2
+        val rows = (sorted.size + cols - 1) / cols
         val paddingV = 16.dp
         val rowGap = 8.dp
         val perRowH = if (rows > 0) {
             (maxHeight - paddingV - rowGap * (rows - 1).coerceAtLeast(0)) / rows
         } else 0.dp
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        columns = GridCells.Fixed(cols),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -204,15 +206,18 @@ private fun AgentCard(
             }
             // v0.3.15 第 2 行：**头像 + 状态**（老板 2026-06-08 新需求）
             // v0.3.36 第 2 行：头像加大 + **当前任务数量**（圆圈背景）
+            // v0.3.40: 状态文字反映"当前负载"——有 todo/in_progress 任务但 server 标记 idle 时显示"待办"
             val workText = when {
                 rtOffline -> "runtime 离线"
                 busy -> "工作中"
+                taskCount > 0 && a.state == "idle" -> "待办"
                 a.state == "idle" -> "空闲"
                 a.state == "offline" -> "离线"
                 else -> a.state
             }
             val workColor = when {
                 busy -> Color(0xFF0A84FF)  // 蓝（工作中）
+                taskCount > 0 && a.state == "idle" -> Color(0xFFFF9F0A) // 橙（有待办）
                 rtOffline -> Color(0xFFEF4444) // 红
                 else -> Color(0xFFA1A1A6)
             }
@@ -315,23 +320,23 @@ private fun isBusy(state: String, updatedAt: String? = null, assignedInProgress:
     }
 }
 
-/** 排序优先级（老板 2026-06-08 新要求）：
+/** 排序优先级（v0.3.40 更新：加入"待办"状态）：
  *  1. 工作中（agent.status = busy）— 最前
- *  2. 空闲（agent.status = idle 且 runtime 在线）
- *  3. 离线（runtime 离线 或 agent 状态为 offline）
- *  4. 其它未知 — 最后
- * 接下来再按 updated_at 倒序（最近活跃在前）
- * v0.3.15: 取消 in_progress / in_review issue 推算（issue 状态滞后导致误判）
+ *  2. 待办（idle 但有 todo/in_progress 任务）— 次前
+ *  3. 空闲（idle 且无任务，runtime 在线）
+ *  4. 离线（runtime 离线 或 agent 状态为 offline）
+ *  5. 其它未知 — 最后
  */
-private fun agentStatePriority(a: Agent, rtMap: Map<String, Runtime>): Int {
+private fun agentStatePriority(a: Agent, rtMap: Map<String, Runtime>, taskCount: Int = 0): Int {
     val rt = rtMap[a.runtimeId]
     val rtOffline = rt != null && !isOnline(rt.state)
     val busy = isBusy(a.state, a.updatedAt)
     return when {
         busy -> 0                                      // 工作中 → 最前
-        a.state == "idle" && !rtOffline -> 1           // 空闲 + runtime 在线
-        rtOffline || a.state == "offline" -> 2         // 离线
-        else -> 3                                       // 未知
+        a.state == "idle" && taskCount > 0 && !rtOffline -> 1  // 待办
+        a.state == "idle" && !rtOffline -> 2           // 空闲 + runtime 在线
+        rtOffline || a.state == "offline" -> 3         // 离线
+        else -> 4                                       // 未知
     }
 }
 

@@ -6,6 +6,8 @@
 
 ## 1. 目标设备
 
+### 1.1 主力设备（main 分支）
+
 | 字段 | 值 |
 |---|---|
 | 设备 | Samsung Galaxy Note 8 (SM-N9500) — 中港版 |
@@ -21,6 +23,21 @@
 | 启动器 | com.samsung.android.app.spage |
 
 > **设备指纹**：`samsung/greatqltezc/greatqltechn:9/PPR1.180610.011/N9500ZCU6DTF2:user/release-keys`
+
+### 1.2 Dell x86 平板（dell-x86 分支）
+
+| 字段 | 值 |
+|---|---|
+| 设备 | Dell Venue 8 7840 |
+| Android | 5.0 (Lollipop) / API 21 |
+| SoC | Intel Atom Z3735D (Bay Trail)，四核 1.33GHz |
+| 架构 | x86 |
+| 屏幕 | 8" 1280×800，~189 dpi |
+| RAM | 1 GB |
+| ROM | 16 GB |
+| 序列号 | `53P021NA01` |
+
+> **注意**：API 21 缺少 `java.time` 包，需通过 `coreLibraryDesugaring` 兼容。
 
 ---
 
@@ -279,4 +296,83 @@ function Invoke-Adb($a, [int]$t=180) {
 ### 已知 issue
 - GitHub release 创 release 时 `Content-Type: application/json` 加 UTF-8 BOM 会导致 "Problems parsing JSON" (400) — 解决方案：用 `System.Text.Encoding.ASCII` 写 body 避免 BOM
 - 之前 `PowerShell WriteAllText` 默认 UTF-8 with BOM → 失败 4 次
+
+---
+
+## 9. v0.3.39 封板变更日志（2026-06-09）
+
+### Agents 卡片优化
+- **头像尺寸**：24dp → 48dp
+- **任务数量圆圈**：20dp → 28dp，移到工作状态文字右边
+- **任务数量分色**：
+  - 0 → 灰色(#3A3A3C / #8E8E93)
+  - 1 → 蓝色(#0A84FF / White)
+  - 2~4 → 橙色(#FF9F0A / White)
+  - 5+ → 红色(#FF3B30 / White)
+- **任务数量计算修正**：仅统计 `in_progress` + `todo` 状态的 issue（之前错误包含 `in_review` / `blocked`）
+- **assigneeName 兜底**：`assigneeId` 为空时通过 `assigneeName` 与 agent `name` 匹配
+
+### 关键文件
+- `app/src/main/java/com/multica/app/ui/dashboard/tabs/AgentsTab.kt` — 卡片 UI + 任务数量逻辑
+
+### Release 状态
+- **Tag**: v0.3.39
+- **versionCode**: 49
+- **Branch**: main
+
+---
+
+## 10. dell-x86 分支变更日志（2026-06-09）
+
+### 分支策略
+- 分支名：`dell-x86`
+- 基于 main (v0.3.39) 创建
+- 独有改动不合回 main，避免影响主线
+
+### 构建配置变更（`app/build.gradle.kts`）
+1. **minSdk**：24 → 21（支持 Android 5.0）
+2. **coreLibraryDesugaring**：
+   - `compileOptions.isCoreLibraryDesugaringEnabled = true`
+   - `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")`
+   - 解决 `java.time.OffsetDateTime` 在 API 21 上不存在导致的 `ClassNotFoundException` 崩溃
+3. **ABI splits**：
+   ```kotlin
+   splits {
+       abi {
+           isEnable = true
+           reset()
+           include("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
+           isUniversalApk = true
+       }
+   }
+   ```
+   - 生成 5 个 APK：x86 / x86_64 / armeabi-v7a / arm64-v8a / universal
+   - Dell 平板安装 `app-x86-debug.apk`（~20MB）
+
+### 崩溃修复
+- **问题**：Runtimes tab 点击后崩溃，`ClassNotFoundException: java.time.OffsetDateTime`
+- **原因**：`java.time` 包在 Android 8.0 (API 26) 才引入，API 21 不存在
+- **方案**：`coreLibraryDesugaring` 在编译时将 `java.time` 调用替换为 desugar 库实现
+
+### 分支同步流程
+```bash
+# main 有新版本后，同步到 dell-x86
+git checkout dell-x86
+git merge main
+# 解决冲突（主要是 build.gradle.kts 的 minSdk/splits/desugaring 保留 dell-x86 的值）
+./gradlew clean assembleDebug
+adb -s 53P021NA01 install -r app/build/outputs/apk/debug/app-x86-debug.apk
+```
+
+### Dell 设备 ADB 命令
+```bash
+# 安装 x86 APK
+adb -s 53P021NA01 install -r app/build/outputs/apk/debug/app-x86-debug.apk
+
+# 启动
+adb -s 53P021NA01 shell am start -n com.multica.app/.MainActivity
+
+# 查看崩溃日志
+adb -s 53P021NA01 logcat -d -s AndroidRuntime:E
+```
 

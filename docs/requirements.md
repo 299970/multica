@@ -88,7 +88,9 @@
    卡片；
 2. 卡片中显示如下
    a. 第一行：agent名称，状态（圆点表示，绿色在线，红色离线，黄色异常）
-   b. 第二行：agent的头像， 工作状态，当前的任务数量(用圆圈背景展示)
+   b. 第二行：agent的头像(48dp)， 工作状态，当前的任务数量(用圆圈背景展示，28dp)
+      - 任务数量颜色：0=灰色(#3A3A3C/#8E8E93)，1=蓝色(#0A84FF)，2~4=橙色(#FF9F0A)，5及以上=红色(#FF3B30)
+      - 任务数量统计范围：状态为 "in_progress" 和 "todo" 的 issue
    c. 第三行：agent 上一次工作的时间，年月日时分秒；
 3. 点击agent 卡片，可以查看该agent 的详细状态
 
@@ -308,4 +310,66 @@
 - [ ] 历史趋势（agent 今日跑了多少任务）
 - [ ] 多语言（中英）
 - [ ] Tablet 适配 / 横屏
+
+***
+
+## 2026-06-09 需求 4：Agents 卡片优化 — 任务数量分色 + 头像加大
+
+### 背景
+老板反馈 Agents 卡片任务数量显示异常（闲的显示1，工作的显示0），以及头像过小、任务数量不够醒目。
+
+### 变更内容
+1. **头像尺寸**：24dp → 48dp
+2. **任务数量圆圈尺寸**：20dp → 28dp
+3. **任务数量位置**：移到工作状态文字右边
+4. **任务数量颜色**（圆圈背景/文字）：
+   - 0 → 灰色(#3A3A3C / #8E8E93)
+   - 1 → 蓝色(#0A84FF / White)
+   - 2~4 → 橙色(#FF9F0A / White)
+   - 5+ → 红色(#FF3B30 / White)
+5. **任务数量计算修正**：仅统计状态为 `in_progress` 和 `todo` 的 issue，修复之前错误统计 `in_review` / `blocked` 的问题
+6. **assigneeName 兜底匹配**：当 `assigneeId` 为空时，通过 `assigneeName` 与 agent `name` 匹配
+
+### 验收标准
+- [x] 头像加大至 48dp
+- [x] 任务数量圆圈加大至 28dp，位于状态文字右边
+- [x] 任务数量按 0/1/2~4/5+ 分色
+- [x] 闲的 agent 任务数量为 0（灰色），工作的 agent 任务数量正确
+- [x] GitHub release v0.3.39 + APK 上传完成
+
+***
+
+## 2026-06-09 需求 5：Dell x86 平板适配
+
+### 背景
+老板有一台 Dell Venue 8 7840 平板（x86 架构，Android 5.0 / API 21），需要 APP 也能安装运行。
+
+### 设备信息
+| 字段 | 值 |
+|---|---|
+| 设备 | Dell Venue 8 7840 |
+| Android | 5.0 (Lollipop) / API 21 |
+| SoC | Intel Atom Z3735D (Bay Trail)，四核 1.33GHz |
+| 架构 | x86 |
+| 屏幕 | 8" 1280×800 |
+| RAM | 1 GB |
+
+### 需求
+1. 不影响主线版本（main 分支 minSdk=24），创建 `dell-x86` 独立分支
+2. `dell-x86` 分支 minSdk 降至 21，支持 Android 5.0
+3. 添加 x86 架构 APK 编译（ABI splits）
+4. 解决 `java.time.OffsetDateTime` 在 API 21 上不存在的问题（coreLibraryDesugaring）
+
+### 分支管理策略
+- **主线优先**：新需求/bug 修复先在 main 开发 + 封板
+- **Dell 同步**：每次主线发版后，`dell-x86` 分支 `git merge main` 同步新功能
+- **Dell 独有修复**（如 desugaring 兼容）直接在 `dell-x86` 修，不合回 main
+- **封板**：两条分支各自封板，版本号一致但 build 不同
+
+### 验收标准
+- [x] `dell-x86` 分支创建，minSdk=21
+- [x] ABI splits 生成 x86/x86_64/arm64-v8a/armeabi-v7a + universal APK
+- [x] coreLibraryDesugaring 解决 java.time 兼容性
+- [x] Dell 平板安装 x86 APK 后 APP 启动正常
+- [x] Runtimes / Agents / Issues / Boss 各 tab 不崩溃
 
