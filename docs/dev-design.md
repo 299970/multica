@@ -376,3 +376,47 @@ adb -s 53P021NA01 shell am start -n com.multica.app/.MainActivity
 adb -s 53P021NA01 logcat -d -s AndroidRuntime:E
 ```
 
+---
+
+## 11. v0.3.41 封板变更日志（2026-06-10）
+
+### 变更概要
+
+1. **负载矩形**（替代任务数量圆圈）
+   - 卡片右侧显示 `当前/合计`（如 `1/3`），高度=头像(48dp)
+   - 当前负载 = in_progress issue 数，合计 = in_progress + todo issue 数
+   - 有负载→蓝色(#0A84FF)，无负载→灰色(#3A3A3C)
+
+2. **"待办"状态**
+   - agent state=idle 但有 todo/in_progress 任务 → 显示"待办"(橙色)
+   - 排序：工作中 > 待办 > 空闲 > 离线
+
+3. **列数可配置**
+   - `SettingsRepository.Settings` 新增 `agentsColsPortrait`(默认2) / `agentsColsLandscape`(默认3)
+   - 设置页 UI：竖屏/横屏各 1~4 按钮选择
+   - `AgentsTab` 接受 `colsPortrait`/`colsLandscape` 参数
+   - `DashboardViewModel` 暴露 `agentsColsPortrait`/`agentsColsLandscape`
+
+4. **横屏适配**
+   - `BoxWithConstraints` 判断 `maxWidth > 600.dp` 时用横屏列数
+
+### 修改文件
+
+| 文件 | 变更 |
+|---|---|
+| `AgentsTab.kt` | 负载矩形UI、待办状态、列数参数、loadByAgent拆分计数 |
+| `SettingsRepository.kt` | 新增 agentsColsPortrait/agentsColsLandscape 字段+持久化 |
+| `SettingsViewModel.kt` | 新增 setAgentsColsPortrait/setAgentsColsLandscape |
+| `SettingsScreen.kt` | 列数选择器UI（竖屏/横屏各1~4按钮） |
+| `DashboardViewModel.kt` | 暴露 agentsColsPortrait/agentsColsLandscape |
+| `DashboardScreen.kt` | 传递列数参数给 AgentsTab |
+| `build.gradle.kts` | versionCode=50, versionName=0.3.41 |
+
+### 设备清单
+
+| 序号 | 序列号 | 型号 | 架构 | 分支 |
+|---|---|---|---|---|
+| 1 | ce07171712dcc228027e | Samsung SM-N9500 | arm64-v8a | main |
+| 2 | 53P021NA01 | Dell Venue 8 7840 | x86 | dell-x86 |
+| 3 | c2469ba10404 | 小米 MI 5X | arm64-v8a | main |
+
