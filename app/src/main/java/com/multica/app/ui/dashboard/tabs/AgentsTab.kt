@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -68,38 +69,43 @@ import com.multica.app.ui.viewmodel.DashboardUiState
 fun AgentsTab(
     s: DashboardUiState,
     runtimes: List<Runtime> = emptyList(),
+    colsPortrait: Int = 2,
+    colsLandscape: Int = 3,
 ) {
     if (s.agents.isEmpty()) {
         EmptyTab(text = "工作区里还没有 agent — 在 Web 里 Settings → Agents 新建")
         return
     }
     val rtMap = remember(runtimes) { runtimes.associateBy { it.id } }
-    // v0.3.39 老板 2026-06-09 反馈：v0.3.37 只算 in_progress 时，busy agent 只有 1 个 "todo"
-    // 任务时也显示 0（server 在 agent 真正开始前不切到 in_progress）
-    //  v0.3.37 修正：去掉 in_review / blocked（不算 agent 任务）— 保留
-    //  v0.3.39 扩展：把 "todo" 也算进去（已分配、即将开始做的）
-    //  同时用 assigneeName 兜底（某些 issue 只返 name 不返 id 时也能匹配）
-    val taskCountByAgent = remember(s.issues, s.agents) {
+    // v0.3.41: 拆分 in_progress 和 todo 计数，用于负载矩形显示 "当前/合计"
+    val loadByAgent = remember(s.issues, s.agents) {
         val nameToId = s.agents.associate { it.name to it.id }
-        s.issues
+        val grouped = s.issues
             .filter { it.status == "in_progress" || it.status == "todo" }
             .groupBy { issue ->
                 issue.assigneeId ?: nameToId[issue.assigneeName] ?: "_unknown"
             }
-            .mapValues { it.value.size }
+        val inProgressByAgent = s.issues
+            .filter { it.status == "in_progress" }
+            .groupBy { issue ->
+                issue.assigneeId ?: nameToId[issue.assigneeName] ?: "_unknown"
+            }
+        s.agents.associate { agent ->
+            agent.id to ((inProgressByAgent[agent.id]?.size ?: 0) to (grouped[agent.id]?.size ?: 0))
+        }
     }
     // v0.3.15: 取消 in_progress / in_review 推算 — 改用 server 真实状态
-    val sorted = remember(s.agents, rtMap, taskCountByAgent) {
+    val sorted = remember(s.agents, rtMap, loadByAgent) {
         s.agents.sortedWith(compareBy(
-            { agentStatePriority(it, rtMap, taskCountByAgent[it.id] ?: 0) },
+            { agentStatePriority(it, rtMap, loadByAgent[it.id]?.second ?: 0) },
             { -it.minuteBucketSortKey },  // v0.3.12: 60秒 bucket 稳定排序
             { it.name },
         ))
     }
     // v0.3.14: 自适应高度 — 算每行卡应得高度（屏高 / 行数）
-    // v0.3.40: 横屏模式 — 宽度 > 600dp 时 3 列，否则 2 列
+    // v0.3.41: 列数可配置（竖屏/横屏），默认竖屏2横屏3
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val cols = if (maxWidth > 600.dp) 3 else 2
+        val cols = if (maxWidth > 600.dp) colsLandscape.coerceIn(1, 4) else colsPortrait.coerceIn(1, 4)
         val rows = (sorted.size + cols - 1) / cols
         val paddingV = 16.dp
         val rowGap = 8.dp
@@ -119,7 +125,8 @@ fun AgentsTab(
                     a = a,
                     runtime = rtMap[a.runtimeId],
                     minHeight = perRowH,  // v0.3.14: 自适应高度
-                    taskCount = taskCountByAgent[a.id] ?: 0,  // v0.3.36: 当前任务数
+                    currentLoad = loadByAgent[a.id]?.first ?: 0,   // in_progress 数
+                    totalLoad = loadByAgent[a.id]?.second ?: 0,    // in_progress + todo 数
                     modifier = Modifier.animateItemPlacement(animationSpec = tween(350)),
                 )
             }
@@ -132,7 +139,8 @@ private fun AgentCard(
     a: Agent,
     runtime: Runtime?,
     minHeight: androidx.compose.ui.unit.Dp = 0.dp,
-    taskCount: Int = 0,  // v0.3.36: 当前 in_progress/in_review/blocked issue 数量
+    currentLoad: Int = 0,   // in_progress 数
+    totalLoad: Int = 0,     // in_progress + todo 数
     modifier: Modifier = Modifier,
 ) {
     val rtOffline = runtime != null && !isOnline(runtime.state)
@@ -204,81 +212,77 @@ private fun AgentCard(
                     maxLines = 1,
                 )
             }
-            // v0.3.15 第 2 行：**头像 + 状态**（老板 2026-06-08 新需求）
-            // v0.3.36 第 2 行：头像加大 + **当前任务数量**（圆圈背景）
-            // v0.3.40: 状态文字反映"当前负载"——有 todo/in_progress 任务但 server 标记 idle 时显示"待办"
+            // v0.3.41: 状态文字反映"当前负载"
             val workText = when {
                 rtOffline -> "runtime 离线"
                 busy -> "工作中"
-                taskCount > 0 && a.state == "idle" -> "待办"
+                totalLoad > 0 && a.state == "idle" -> "待办"
                 a.state == "idle" -> "空闲"
                 a.state == "offline" -> "离线"
                 else -> a.state
             }
             val workColor = when {
                 busy -> Color(0xFF0A84FF)  // 蓝（工作中）
-                taskCount > 0 && a.state == "idle" -> Color(0xFFFF9F0A) // 橙（有待办）
+                totalLoad > 0 && a.state == "idle" -> Color(0xFFFF9F0A) // 橙（有待办）
                 rtOffline -> Color(0xFFEF4444) // 红
                 else -> Color(0xFFA1A1A6)
             }
-            // v0.3.38 任务数量配色（老板 2026-06-09 要求）：
-            //   0   → 灰
-            //   1   → 蓝
-            //   2~4 → 橙
-            //   ≥5  → 红
-            val (taskBgColor, taskTextColor) = when {
-                taskCount == 0 -> Color(0xFF3A3A3C) to Color(0xFF8E8E93)
-                taskCount == 1 -> Color(0xFF0A84FF) to Color.White
-                taskCount in 2..4 -> Color(0xFFFF9F0A) to Color.White
-                else -> Color(0xFFFF3B30) to Color.White
-            }
+            // v0.3.41: 负载矩形 — 靠右，高度=头像高度(48dp)，显示 "当前/合计"
+            val loadBgColor = if (totalLoad > 0) Color(0xFF0A84FF) else Color(0xFF3A3A3C)
+            val loadTextColor = if (totalLoad > 0) Color.White else Color(0xFF8E8E93)
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // v0.3.36: 头像尺寸加大 (24dp -> 48dp)
-                if (!a.avatarUrl.isNullOrBlank()) {
-                    Avatar(
-                        url = a.avatarUrl,
-                        size = 48.dp,
-                        fallback = a.name.firstOrNull()?.toString() ?: "?",
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF3A3A3C)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = a.name.firstOrNull()?.toString() ?: "?",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFF5F5F7),
+                // 左侧：头像 + 状态文字
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (!a.avatarUrl.isNullOrBlank()) {
+                        Avatar(
+                            url = a.avatarUrl,
+                            size = 48.dp,
+                            fallback = a.name.firstOrNull()?.toString() ?: "?",
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF3A3A3C)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = a.name.firstOrNull()?.toString() ?: "?",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFF5F5F7),
+                            )
+                        }
                     }
+                    Text(
+                        text = workText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = workColor,
+                        fontWeight = if (busy) FontWeight.SemiBold else FontWeight.Normal,
+                    )
                 }
-                // 状态文字（先状态，再数量 — v0.3.38 调整）
-                Text(
-                    text = workText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = workColor,
-                    fontWeight = if (busy) FontWeight.SemiBold else FontWeight.Normal,
-                )
-                // v0.3.38: 任务数量圆圈移到状态右边，并加大尺寸（20dp -> 28dp）
+                // 右侧：负载矩形
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(taskBgColor),
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(loadBgColor)
+                        .padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = taskCount.toString(),
+                        text = "$currentLoad/$totalLoad",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = taskTextColor,
+                        color = loadTextColor,
                     )
                 }
             }
@@ -327,13 +331,13 @@ private fun isBusy(state: String, updatedAt: String? = null, assignedInProgress:
  *  4. 离线（runtime 离线 或 agent 状态为 offline）
  *  5. 其它未知 — 最后
  */
-private fun agentStatePriority(a: Agent, rtMap: Map<String, Runtime>, taskCount: Int = 0): Int {
+private fun agentStatePriority(a: Agent, rtMap: Map<String, Runtime>, totalLoad: Int = 0): Int {
     val rt = rtMap[a.runtimeId]
     val rtOffline = rt != null && !isOnline(rt.state)
     val busy = isBusy(a.state, a.updatedAt)
     return when {
         busy -> 0                                      // 工作中 → 最前
-        a.state == "idle" && taskCount > 0 && !rtOffline -> 1  // 待办
+        a.state == "idle" && totalLoad > 0 && !rtOffline -> 1  // 待办
         a.state == "idle" && !rtOffline -> 2           // 空闲 + runtime 在线
         rtOffline || a.state == "offline" -> 3         // 离线
         else -> 4                                       // 未知

@@ -21,10 +21,10 @@ android {
 
     defaultConfig {
         applicationId = "com.multica.app"
-        minSdk = 21  // dell-x86 分支：降到 21 以支持 Dell Venue 8 (Android 5.0)
+        minSdk = 24
         targetSdk = 34
-        versionCode = 49
-        versionName = "0.3.39"
+        versionCode = 50
+        versionName = "0.3.41"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -58,7 +58,6 @@ android {
     }
 
     compileOptions {
-        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -75,15 +74,6 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    // dell-x86 分支：生成 x86 架构 APK（Dell Venue 8 7840 是 x86）
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
-            isUniversalApk = true
         }
     }
 }
@@ -129,9 +119,6 @@ dependencies {
 
     // Coil (icons in case we need to load user avatars)
     implementation("io.coil-kt:coil-compose:2.5.0")
-
-    // Desugaring — 让 java.time (API 26+) 在 Android 5.0 (API 21) 上可用
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // Test
     testImplementation("junit:junit:4.13.2")

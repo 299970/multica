@@ -102,6 +102,10 @@ class DashboardViewModel(
     private val _state = MutableStateFlow(DashboardUiState())
     val state: StateFlow<DashboardUiState> = _state.asStateFlow()
 
+    // v0.3.41: 暴露 agents 列数设置给 UI
+    val agentsColsPortrait: Int get() = settings.current.agentsColsPortrait
+    val agentsColsLandscape: Int get() = settings.current.agentsColsLandscape
+
     // === Issue 详情（v0.3.5 新增） ===
     private val _issueDetail = MutableStateFlow(IssueDetailState())
     val issueDetail: StateFlow<IssueDetailState> = _issueDetail.asStateFlow()

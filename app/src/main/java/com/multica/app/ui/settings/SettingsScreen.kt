@@ -2,6 +2,7 @@ package com.multica.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -117,6 +119,43 @@ fun SettingsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // v0.3.41: Agents 卡片列数设置
+            Text(
+                "Agents 卡片列数",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("竖屏", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        (1..4).forEach { n ->
+                            Button(
+                                onClick = { vm.setAgentsColsPortrait(n) },
+                                modifier = Modifier.weight(1f),
+                                enabled = n != s.agentsColsPortrait,
+                            ) { Text("$n") }
+                        }
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("横屏", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        (1..4).forEach { n ->
+                            Button(
+                                onClick = { vm.setAgentsColsLandscape(n) },
+                                modifier = Modifier.weight(1f),
+                                enabled = n != s.agentsColsLandscape,
+                            ) { Text("$n") }
+                        }
+                    }
+                }
+            }
 
             s.errorMessage?.let {
                 Text(

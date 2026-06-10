@@ -16,6 +16,8 @@ data class SettingsUiState(
     val wanUrl: String = "",
     val workspaceId: String = "",
     val pat: String = "",
+    val agentsColsPortrait: Int = 2,
+    val agentsColsLandscape: Int = 3,
     val isWorking: Boolean = false,
     val errorMessage: String? = null,
     val testResult: String? = null,
@@ -37,6 +39,8 @@ class SettingsViewModel(
             wanUrl = cur.wanUrl,
             workspaceId = cur.workspaceId,
             pat = cur.pat,
+            agentsColsPortrait = cur.agentsColsPortrait,
+            agentsColsLandscape = cur.agentsColsLandscape,
         )
     }
 
@@ -46,6 +50,8 @@ class SettingsViewModel(
     fun setWanUrl(v: String) = _state.update { it.copy(wanUrl = v.trim(), errorMessage = null) }
     fun setWorkspaceId(v: String) = _state.update { it.copy(workspaceId = v.trim(), errorMessage = null) }
     fun setPat(v: String) = _state.update { it.copy(pat = v.trim(), errorMessage = null) }
+    fun setAgentsColsPortrait(v: Int) = _state.update { it.copy(agentsColsPortrait = v.coerceIn(1, 4)) }
+    fun setAgentsColsLandscape(v: Int) = _state.update { it.copy(agentsColsLandscape = v.coerceIn(1, 4)) }
 
     fun save() {
         viewModelScope.launch {
@@ -63,6 +69,8 @@ class SettingsViewModel(
                     wanUrl = s.wanUrl,
                     workspaceId = s.workspaceId,
                     pat = s.pat,
+                    agentsColsPortrait = s.agentsColsPortrait,
+                    agentsColsLandscape = s.agentsColsLandscape,
                 )
             }
             // 2. 重建 repo（baseUrl 传 lan 优先，repo 内部会按 NetManager 实际切换）

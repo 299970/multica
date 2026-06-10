@@ -44,6 +44,8 @@ class SettingsRepository(appContext: Context) {
             .putString(KEY_LAN_URL, s.lanUrl)
             .putString(KEY_WAN_URL, s.wanUrl)
             .putString(KEY_WORKSPACE_ID, s.workspaceId)
+            .putInt(KEY_AGENTS_COLS_PORTRAIT, s.agentsColsPortrait)
+            .putInt(KEY_AGENTS_COLS_LANDSCAPE, s.agentsColsLandscape)
             .apply()
         encrypted.edit()
             .putString(KEY_PAT, s.pat)
@@ -57,6 +59,8 @@ class SettingsRepository(appContext: Context) {
         wanUrl = normal.getString(KEY_WAN_URL, null) ?: BuildConfig.DEFAULT_WAN_URL,
         workspaceId = normal.getString(KEY_WORKSPACE_ID, null) ?: "",
         pat = encrypted.getString(KEY_PAT, null) ?: BuildConfig.DEFAULT_PAT,
+        agentsColsPortrait = normal.getInt(KEY_AGENTS_COLS_PORTRAIT, 2),
+        agentsColsLandscape = normal.getInt(KEY_AGENTS_COLS_LANDSCAPE, 3),
     )
 
     data class Settings(
@@ -65,6 +69,8 @@ class SettingsRepository(appContext: Context) {
         val wanUrl: String = "",
         val workspaceId: String,
         val pat: String,
+        val agentsColsPortrait: Int = 2,   // 竖屏 agents 卡片列数
+        val agentsColsLandscape: Int = 3,  // 横屏 agents 卡片列数
     ) {
         val isConfigured: Boolean
             get() = (serverUrl.isNotBlank() || lanUrl.isNotBlank() || wanUrl.isNotBlank()) && pat.isNotBlank()
@@ -78,5 +84,7 @@ class SettingsRepository(appContext: Context) {
         private const val KEY_WAN_URL = "wan_url"
         private const val KEY_WORKSPACE_ID = "workspace_id"
         private const val KEY_PAT = "pat"
+        private const val KEY_AGENTS_COLS_PORTRAIT = "agents_cols_portrait"
+        private const val KEY_AGENTS_COLS_LANDSCAPE = "agents_cols_landscape"
     }
 }

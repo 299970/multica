@@ -214,7 +214,12 @@ fun DashboardScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 when (tab) {
                     0 -> DaemonsTab(s = s, agents = s.agents, onRefresh = vm::refresh)
-                    1 -> AgentsTab(s = s, runtimes = s.runtimes)
+                    1 -> AgentsTab(
+                        s = s,
+                        runtimes = s.runtimes,
+                        colsPortrait = vm.agentsColsPortrait,
+                        colsLandscape = vm.agentsColsLandscape,
+                    )
                     2 -> IssuesTab(s = s, agents = s.agents, onIssueClick = vm::openIssue)
                     3 -> BossTab(s = s, onRefresh = vm::refresh, onIssueClick = vm::openIssue)
                 }
