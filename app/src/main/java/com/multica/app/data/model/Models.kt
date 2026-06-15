@@ -75,8 +75,18 @@ data class Runtime(
     /** 来自 server `provider`（"openclaw" / "claude" / "hermes"） */
     @SerialName("provider") val profile: String? = null,
     @SerialName("last_seen_at") val lastHeartbeatAt: String? = null,
+    /** 来自 server `metadata` */
+    val metadata: RuntimeMetadata? = null,
     /** 从 metadata.version + last_seen_at 算 "up since x, 5m ago" */
     val uptime: String? = null,
+)
+
+/** Runtime metadata — cli_version / version / launched_by */
+@Serializable
+data class RuntimeMetadata(
+    @SerialName("cli_version") val cliVersion: String? = null,
+    val version: String? = null,
+    @SerialName("launched_by") val launchedBy: String? = null,
 )
 
 /** Agent = 调度平台里的虚拟同事
@@ -98,6 +108,8 @@ data class Agent(
     @SerialName("avatar_url") val avatarUrl: String? = null,
     val visibility: String? = null, // "workspace" | "private"
     @SerialName("max_concurrent_tasks") val maxConcurrentTasks: Int? = null,
+    /** 来自 server `model`（当前使用模型，如 "claude-3.5-sonnet"） */
+    val model: String? = null,
     /** 来自 server `updated_at`（ISO 8601） */
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
@@ -121,6 +133,8 @@ data class Issue(
     @SerialName("assignee_type") val assigneeType: String? = null, // "user" | "agent"
     val assigneeName: String? = null,
     @SerialName("is_agent_assignee") val isAgentAssignee: Boolean = false,
+    @SerialName("creator_id") val creatorId: String? = null,
+    @SerialName("creator_type") val creatorType: String? = null, // "member" | "agent"
     val description: String? = null,
     val number: Int? = null,
     @SerialName("start_date") val startDate: String? = null,     // ISO date
@@ -252,3 +266,25 @@ data class IssueListResponse(val issues: List<Issue> = emptyList())
 /** `/api/runtimes` → `{"runtimes":[...]}` */
 @Serializable
 data class RuntimeListResponse(val runtimes: List<Runtime> = emptyList())
+
+/** `/api/agents/{id}/tasks` 返回的 task 对象 */
+@Serializable
+data class AgentTask(
+    val id: String = "",
+    @SerialName("agent_id") val agentId: String = "",
+    @SerialName("issue_id") val issueId: String = "",
+    val status: String = "",  // "running" | "completed" | "failed" | "cancelled" | "queued"
+    val priority: Int = 0,
+    @SerialName("dispatched_at") val dispatchedAt: String? = null,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("completed_at") val completedAt: String? = null,
+)
+
+/** GitHub release — 用于检测 multica 新版本 */
+@Serializable
+data class GitHubRelease(
+    @SerialName("tag_name") val tagName: String = "",
+    val name: String? = null,
+    @SerialName("published_at") val publishedAt: String? = null,
+    val html_url: String? = null,
+)

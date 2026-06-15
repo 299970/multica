@@ -47,4 +47,18 @@ object MulticaApiFactory {
             .addInterceptor(log)
             .build()
     }
+
+    /** 构建 GitHub API 实例（无需 auth） */
+    fun buildGitHub(): GitHubApi {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://api.github.com/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+        return retrofit.create(GitHubApi::class.java)
+    }
 }

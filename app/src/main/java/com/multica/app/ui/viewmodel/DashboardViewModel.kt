@@ -45,7 +45,30 @@ data class DashboardUiState(
     val bossMyIssues: List<Issue> = emptyList(),                    // @will / assignee = me
     val bossReviewIssues: List<Issue> = emptyList(),                // 需审核（in_review）
     val bossChatMessages: List<InboxItem> = emptyList(),           // chat 消息（type=chat/new_comment）
+    // === v0.3.42 Agent 当前运行任务数（agentId → running task count） ===
+    val agentRunningTasks: Map<String, Int> = emptyMap(),
+    // === v0.3.42 服务器版本号 ===
+    val serverVersion: String? = null,      // 当前服务器版本（从 runtime metadata.cli_version 获取）
+    val latestVersion: String? = null,       // GitHub 最新 release 版本
 ) {
+    /** 当前服务器版本是否落后于 GitHub 最新版 */
+    val hasNewVersion: Boolean get() {
+        val sv = serverVersion ?: return false
+        val lv = latestVersion ?: return false
+        return compareVersions(sv, lv) < 0
+    }
+
+    /** 语义化版本比较：返回 -1/0/1 */
+    private fun compareVersions(a: String, b: String): Int {
+        val pa = a.split(".").map { it.toIntOrNull() ?: 0 }
+        val pb = b.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(pa.size, pb.size)) {
+            val va = pa.getOrElse(i) { 0 }
+            val vb = pb.getOrElse(i) { 0 }
+            if (va != vb) return va.compareTo(vb)
+        }
+        return 0
+    }
     /** Boss Tab 计数（显示在 Tab 标题上） */
     // v0.3.21: bossCount = 实际显示的 4 个 section 总数
     //   - @will: bossMyIssues
@@ -177,8 +200,22 @@ class DashboardViewModel(
                 val r = rR.getOrNull() ?: _state.value.runtimes
                 val a = aR.getOrNull() ?: _state.value.agents
                 val i = iR.getOrNull() ?: _state.value.issues
+                // v0.3.42: 获取每个 agent 的 running task 数量
+                val runningTasks = mutableMapOf<String, Int>()
+                a.forEach { agent ->
+                    try {
+                        val tasks = repo.agentTasks(slug, agent.id).getOrNull() ?: return@forEach
+                        val count = tasks.count { it.status == "running" }
+                        if (count > 0) runningTasks[agent.id] = count
+                    } catch (_: Throwable) { }
+                }
                 _state.update {
-                    it.copy(runtimes = r, agents = a, issues = i)
+                    it.copy(runtimes = r, agents = a, issues = i, agentRunningTasks = runningTasks)
+                }
+                // v0.3.42: 提取服务器版本号（从第一个在线 runtime 的 metadata.cli_version）
+                val sv = r.firstOrNull { it.state == "online" }?.metadata?.cliVersion
+                if (sv != null) {
+                    _state.update { it.copy(serverVersion = sv) }
                 }
                 // v0.3.25: polling 也调声音检测
                 detectStateChangesAndPlay(r, a, i)
@@ -200,6 +237,23 @@ class DashboardViewModel(
         // v0.3.23: 启动时**强制**播一次"启动音" — 让老板能立刻确认声音系统工作
         android.util.Log.d("MulticaSound", "init: playing startup ding")
         NotificationSound.ding(app)
+
+        // v0.3.42: 定期检测 GitHub 最新版本（每 30 分钟）
+        viewModelScope.launch {
+            while (true) {
+                checkLatestVersion()
+                kotlinx.coroutines.delay(30 * 60 * 1000L)
+            }
+        }
+    }
+
+    /** 从 GitHub API 获取最新 release 版本，与当前 serverVersion 比较 */
+    private suspend fun checkLatestVersion() {
+        try {
+            val release = repo.latestRelease().getOrNull() ?: return
+            val latest = release.tagName.removePrefix("v")
+            _state.update { it.copy(latestVersion = latest) }
+        } catch (_: Throwable) { }
     }
 
     fun refresh() {

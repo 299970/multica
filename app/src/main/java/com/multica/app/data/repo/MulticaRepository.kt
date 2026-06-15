@@ -1,6 +1,7 @@
 package com.multica.app.data.repo
 
 import com.multica.app.data.api.AuthInterceptor
+import com.multica.app.data.api.GitHubApi
 import com.multica.app.data.api.MulticaApi
 import com.multica.app.data.api.MulticaApiFactory
 import com.multica.app.data.model.Agent
@@ -42,6 +43,9 @@ class MulticaRepository(
         // 防止空 baseUrl 让 Retrofit 抛 IllegalArgumentException 把 APP 启动期就崩
         MulticaApiFactory.build(serverUrl.ifBlank { "http://localhost.invalid/" }, pat)
     @Volatile private var ws: MulticaWebSocket? = null
+
+    // v0.3.42: GitHub API（独立实例，无需 auth）
+    private val gitHubApi: GitHubApi = MulticaApiFactory.buildGitHub()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -112,6 +116,14 @@ class MulticaRepository(
     // === Issue 详情 API ===
     suspend fun issueDetail(workspaceSlug: String, issueId: String): Result<com.multica.app.data.model.IssueDetail> =
         safe { api.issueDetail(issueId, workspaceSlug) }
+
+    // === Agent Tasks API ===
+    suspend fun agentTasks(workspaceSlug: String, agentId: String): Result<List<com.multica.app.data.model.AgentTask>> =
+        safe { api.agentTasks(agentId, workspaceSlug) }
+
+    // === GitHub Release API ===
+    suspend fun latestRelease(): Result<com.multica.app.data.model.GitHubRelease> =
+        safe { gitHubApi.latestRelease() }
     suspend fun issueComments(workspaceSlug: String, issueId: String): Result<List<com.multica.app.data.model.IssueComment>> =
         safe { api.issueComments(issueId, workspaceSlug) }
 

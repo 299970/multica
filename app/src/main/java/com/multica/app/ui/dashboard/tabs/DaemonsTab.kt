@@ -239,6 +239,32 @@ private fun HostCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        // v0.3.42: 显示 runtime 版本号（来自 metadata.cli_version）
+        val versions = group.runtimes.mapNotNull { it.metadata?.cliVersion }.distinct()
+        if (versions.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                versions.forEach { v ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF8E8E93).copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "v$v",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF8E8E93),
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+        }
     } // Column 关闭
     } // Card 关闭
 } // HostCard 关闭

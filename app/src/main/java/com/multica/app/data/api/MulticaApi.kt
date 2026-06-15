@@ -1,9 +1,11 @@
 package com.multica.app.data.api
 
 import com.multica.app.data.model.Agent
+import com.multica.app.data.model.AgentTask
 import com.multica.app.data.model.DailyUsage
 import com.multica.app.data.model.DailyUsageResponse
 import com.multica.app.data.model.DaemonStatus
+import com.multica.app.data.model.GitHubRelease
 import com.multica.app.data.model.InboxItem
 import com.multica.app.data.model.Issue
 import com.multica.app.data.model.IssueListResponse
@@ -147,4 +149,20 @@ interface MulticaApi {
         @Path("issueId") issueId: String,
         @Query("workspace_slug") workspaceSlug: String,
     ): List<com.multica.app.data.model.IssueComment>
+
+    /** Agent 任务列表 — `GET /api/agents/{agentId}/tasks` → AgentTask[]（裸数组） */
+    @GET("api/agents/{agentId}/tasks")
+    suspend fun agentTasks(
+        @Path("agentId") agentId: String,
+        @Query("workspace_slug") workspaceSlug: String,
+    ): List<AgentTask>
+}
+
+/**
+ * GitHub API — 独立 Retrofit 实例（baseUrl = https://api.github.com/）
+ * 用于获取 multica 最新 release 版本
+ */
+interface GitHubApi {
+    @GET("repos/multica-ai/multica/releases/latest")
+    suspend fun latestRelease(): GitHubRelease
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -73,6 +74,7 @@ fun DashboardScreen(
         topBar = {
             Column {
                 // v0.3.21: 简化 TopAppBar（去掉状态文字行）— 让顶部不占大块空间
+                // v0.3.42: 进一步压缩高度
                 TopAppBar(
                     title = {
                         // v0.3.30: 标题 + 探测转圈 + 工作区 dropdown
@@ -83,7 +85,7 @@ fun DashboardScreen(
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(wsBg)
                                         .clickable { wsMenuOpen = true }
-                                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                                        .padding(horizontal = 8.dp, vertical = 1.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
@@ -138,6 +140,16 @@ fun DashboardScreen(
                                 }
                             }
                             }  // close Box (v0.3.30: 之前少一个 close)
+                            // v0.3.42: 工作区标题右边显示服务器版本号
+                            s.serverVersion?.let { ver ->
+                                Spacer(Modifier.size(8.dp))
+                                Text(
+                                    text = "v$ver",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (s.hasNewVersion) Color(0xFFFF3B30) else Color.White.copy(alpha = 0.7f),
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
                             // v0.3.30: 标题右边转圈动画（探测中显示）
                             if (s.netProbing) {
                                 Spacer(Modifier.size(8.dp))
@@ -176,6 +188,7 @@ fun DashboardScreen(
         }
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             // v0.3.20: 老板 2026-06-08 需求 — 顶部 tab 颜色白色 + tab 样式
+            // v0.3.42: 压缩 TabRow 高度
             TabRow(
                 selectedTabIndex = tab,
                 containerColor = Color(0xFF1C1C1E),  // 暗色背景
@@ -186,29 +199,32 @@ fun DashboardScreen(
                     onClick = { tab = 0 },
                     selectedContentColor = Color.White,
                     unselectedContentColor = Color(0xFFB0B0B0),
-                    // v0.3.13: 按 host 数（每台主机一个卡片），不按 runtime 数
-                    text = { Text("Runtimes · ${s.runtimesHostCount}", color = Color.White) },
+                    modifier = Modifier.height(36.dp),
+                    text = { Text("Runtimes · ${s.runtimesHostCount}", color = Color.White, style = MaterialTheme.typography.labelMedium) },
                 )
                 Tab(
                     selected = tab == 1,
                     onClick = { tab = 1 },
                     selectedContentColor = Color.White,
                     unselectedContentColor = Color(0xFFB0B0B0),
-                    text = { Text("Agents · ${s.agents.size}", color = Color.White) },
+                    modifier = Modifier.height(36.dp),
+                    text = { Text("Agents · ${s.agents.size}", color = Color.White, style = MaterialTheme.typography.labelMedium) },
                 )
                 Tab(
                     selected = tab == 2,
                     onClick = { tab = 2 },
                     selectedContentColor = Color.White,
                     unselectedContentColor = Color(0xFFB0B0B0),
-                    text = { Text("Issues · ${s.activeIssuesCount}", color = Color.White) },
+                    modifier = Modifier.height(36.dp),
+                    text = { Text("Issues · ${s.activeIssuesCount}", color = Color.White, style = MaterialTheme.typography.labelMedium) },
                 )
                 Tab(
                     selected = tab == 3,
                     onClick = { tab = 3 },
                     selectedContentColor = Color.White,
                     unselectedContentColor = Color(0xFFB0B0B0),
-                    text = { Text("Boss · ${s.bossCount}", color = Color.White) },
+                    modifier = Modifier.height(36.dp),
+                    text = { Text("Boss · ${s.bossCount}", color = Color.White, style = MaterialTheme.typography.labelMedium) },
                 )
             }
             Box(modifier = Modifier.fillMaxSize()) {
